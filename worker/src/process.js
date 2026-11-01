@@ -122,6 +122,10 @@ export async function processItem(env, id, origin) {
         break;
       case 'place':
         resolved = await resolvePlace(env, brain.place || { name: brain.title, query: brain.title }, source.location);
+        if (resolved.image && !source.photo_key) {
+          const m = await attempt('place image', () => putMediaFromUrl(env, id, 'image', resolved.image));
+          if (m) media.push(m);
+        }
         break;
       default:
         resolved = {};

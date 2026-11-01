@@ -38,6 +38,10 @@ export async function resolvePlace(env, { name, query }, location) {
   const out = { name, query };
   if (location) out.map_url = `https://maps.apple.com/?q=${encodeURIComponent(name)}&ll=${location.lat},${location.lng}`;
   else out.map_url = `https://maps.apple.com/?q=${encodeURIComponent(query || name)}`;
+  const w = await wikipedia(name).catch(() => null);
+  if (w && w.title.toLowerCase().split(/\W+/).some(t => t.length > 3 && name.toLowerCase().includes(t))) {
+    Object.assign(out, { wikipedia_title: w.title, url: w.url, extract: w.extract, image: w.image });
+  }
   return out;
 }
 

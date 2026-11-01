@@ -7,7 +7,7 @@ const SYSTEM = `You are the brain of Bag of Holding, a personal collection for B
 The raw capture is provenance. The item is the resolved thing:
 - "I love 30 seconds to 50 seconds of Song X by Y" is a song_moment: the track and the time range. A single timestamp means a 10 second clip starting there. Convert all times to seconds.
 - A photo plus "I like this font" is a font: identify the typeface in the photo. Give up to 3 candidate families with confidence 0 to 1 and a short reason each. Set needs_confirm unless the top candidate is above 0.85.
-- A photo plus words about the look, the vibe, the era or the movement ("what style is this", "I love this aesthetic", "this kind of building") is a style: name the style precisely (brutalism, art deco, memphis, frutiger aero, mid-century modern, swiss style, wabi-sabi, y2k, ...), give its era, 3 to 5 traits visible in the photo, and closely related styles. Prefer the most specific name that is still correct over a broad one. A building with no words is usually a style unless it is a famous landmark, which is a place.
+- A photo plus words about the look, the vibe, the era or the movement ("what style is this", "I love this aesthetic", "this kind of building") is a style: name the style precisely (brutalism, art deco, memphis, frutiger aero, mid-century modern, swiss style, wabi-sabi, y2k, ...), give its era, 3 to 5 traits visible in the photo, and closely related styles. Prefer the most specific name that is still correct over a broad one. When the words are about the style, the kind is style even for a famous building; name the building in observations. A building or venue with no words, or words about the place itself ("this place", "I was here"), is a place.
 - A photo of a painting, print, photograph, sculpture or illustration is an artwork: title, artist, year and medium if you can identify it; otherwise the closest movement and a search query.
 - A photo of an object, product, poster, room, garment, plant or vehicle with no other instruction is a thing: say what it is, who makes it if you can tell, a category (product, furniture, garment, plant, animal, vehicle, packaging, sign, food, ...), and a web search query that would find it. If the words name a specific aspect ("the chair", "those tiles"), resolve that aspect, not the whole scene.
 - Whatever the kind, when there is a photo also fill observations: short labeled facts about anything else you can suss out that he might care about later: typeface, style or era, color palette, material, maker, location, photographer. Only confident, useful ones; 0 to 6 of them. Skip the obvious.
@@ -86,13 +86,19 @@ export async function classify(env, { transcript, text, note, photo, location, e
     response = await client.messages.create({ ...base, output_config: { ...base.output_config, format: schema() } });
   } catch (err) {
     if (!(err instanceof Anthropic.BadRequestError)) throw err;
-    response = await client.messages.create(base);
+    console.warn(`brain: structured output rejected, falling back: ${err.message}`);
+    response = await client.messages.create({
+      ...base,
+      system: `${SYSTEM}\n\nReply with one JSON object and nothing else, matching this JSON schema exactly (same keys, null for unused kinds):\n${JSON.stringify(schema().schema)}`,
+    });
   }
   if (response.stop_reason === 'refusal') throw new Error(`brain refused: ${response.stop_details?.explanation || ''}`);
   const textBlock = response.content.find(b => b.type === 'text');
   if (!textBlock) throw new Error('brain returned no text');
   const out = extractJson(textBlock.text);
   if (!KINDS.includes(out.kind)) out.kind = 'idea';
+  if (out.font?.candidates) out.font.candidates = out.font.candidates.map(c => ({ name: c.name || c.family || c.font || '', confidence: Number(c.confidence) || 0, reason: c.reason || '' })).filter(c => c.name);
+  if (!Array.isArray(out.observations)) out.observations = [];
   out.tags = Array.from(new Set((out.tags || []).map(t => String(t).toLowerCase().trim()).filter(Boolean))).slice(0, 8);
   return out;
 }

@@ -128,7 +128,10 @@ function openDetail(id) {
   if (item.kind === 'book') h += `<div class="row">${esc(r.author || '')}${r.year ? ` · ${r.year}` : ''}${r.url ? ` · <a href="${r.url}" target="_blank" rel="noopener">open library</a>` : ''}</div>`;
   if (item.kind === 'film') h += `<div class="row">${r.year ? esc(r.year) : ''}${r.search_url ? ` · <a href="${r.search_url}" target="_blank" rel="noopener">find it</a>` : ''}</div>`;
   if (item.kind === 'album') h += `<div class="row">${esc(r.artist || '')}${r.year ? ` · ${r.year}` : ''}${r.itunes_url ? ` · <a href="${r.itunes_url}" target="_blank" rel="noopener">apple music</a>` : ''}</div>`;
-  if (item.kind === 'place') h += `<div class="row">${r.map_url ? `<a href="${r.map_url}" target="_blank" rel="noopener">map</a>` : ''}</div>`;
+  if (item.kind === 'place') {
+    if (r.extract) h += `<div class="text" style="font-size:14px;color:var(--muted)">${esc(r.extract)}</div>`;
+    h += `<div class="row">${r.map_url ? `<a href="${r.map_url}" target="_blank" rel="noopener">map</a>` : ''}${r.url ? ` · <a href="${r.url}" target="_blank" rel="noopener">wikipedia</a>` : ''}</div>`;
+  }
   if (item.kind === 'style') {
     h += `<div class="row">${esc(r.era || '')}</div>`;
     if (r.traits?.length) h += `<div class="text" style="font-size:14px">${r.traits.map(esc).join(' · ')}</div>`;
