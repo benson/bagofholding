@@ -4,7 +4,11 @@ export const KINDS = ['idea', 'song_moment', 'font', 'style', 'artwork', 'thing'
 
 const SYSTEM = `You are the brain of Bag of Holding, a personal collection for Benson. He captures a fleeting reaction with as little effort as possible: a mumbled sentence, a quick photo, a typed fragment. Your job is to work out what he actually wants to keep and describe the real object, not the capture.
 
-The raw capture is provenance. The item is the resolved thing:
+The raw capture is provenance. The item is the resolved thing.
+
+First decide what he is reacting to. His words decide, not the photo's subject: "style", "look", "vibe", "aesthetic", "era", "kind of", "this type of" mean he is reacting to HOW it looks, so the kind is style and the specific building, product or place goes into observations. Without such words, he is reacting to WHAT it is: a landmark is a place, a product is a thing, a painting is an artwork.
+
+Kinds:
 - "I love 30 seconds to 50 seconds of Song X by Y" is a song_moment: the track and the time range. A single timestamp means a 10 second clip starting there. Convert all times to seconds.
 - A photo plus "I like this font" is a font: identify the typeface in the photo. Give up to 3 candidate families with confidence 0 to 1 and a short reason each. Set needs_confirm unless the top candidate is above 0.85.
 - A photo plus words about the look, the vibe, the era or the movement ("what style is this", "I love this aesthetic", "this kind of building") is a style: name the style precisely (brutalism, art deco, memphis, frutiger aero, mid-century modern, swiss style, wabi-sabi, y2k, ...), give its era, 3 to 5 traits visible in the photo, and closely related styles. Prefer the most specific name that is still correct over a broad one. When the words are about the style, the kind is style even for a famous building; name the building in observations. A building or venue with no words, or words about the place itself ("this place", "I was here"), is a place.
@@ -19,12 +23,14 @@ The raw capture is provenance. The item is the resolved thing:
 
 Title: a short natural-language name for the thing itself (track name, font family, product, the idea's gist). Summary: one line, may be empty for ideas. Tags: 2 to 6 lowercase tags. Reuse the existing tags passed to you whenever one fits; invent new ones only when nothing fits. Prefer theme tags (typography, music, product, architecture, writing, design, food, humor) and specific tags (an artist, a genre, a material).
 
-Fill only the field for the chosen kind; set the others to null. Dictation is noisy: "tracks" might be "track", "fawn" might be "font". Infer generously from context.`;
+Fill the object for the chosen kind; leave the other kinds' objects with empty strings, empty arrays and 0. Unknown values are empty strings.
+ Dictation is noisy: "tracks" might be "track", "fawn" might be "font". Infer generously from context.`;
 
 function schema() {
   const str = { type: 'string' };
   const num = { type: 'number' };
-  const nullable = (obj) => ({ anyOf: [obj, { type: 'null' }] });
+  // The API caps union-typed fields per schema, so "unused" is an empty string / empty object, not null.
+  const nullable = (obj) => obj;
   const obj = (props) => ({ type: 'object', properties: props, required: Object.keys(props), additionalProperties: false });
   return {
     type: 'json_schema',
@@ -78,7 +84,7 @@ export async function classify(env, { transcript, text, note, photo, location, e
     max_tokens: 4000,
     system: SYSTEM,
     messages: [{ role: 'user', content }],
-    output_config: { effort: 'medium' },
+    output_config: { effort: 'high' },
   };
 
   let response;
@@ -97,6 +103,14 @@ export async function classify(env, { transcript, text, note, photo, location, e
   if (!textBlock) throw new Error('brain returned no text');
   const out = extractJson(textBlock.text);
   if (!KINDS.includes(out.kind)) out.kind = 'idea';
+  // Empty-string placeholders become nulls; untouched kind objects become null.
+  const blank = v => v === '' || v === 0 || (Array.isArray(v) && v.length === 0);
+  for (const k of ['idea', 'song', 'link', 'font', 'thing', 'book', 'film', 'album', 'place', 'quote', 'style', 'artwork']) {
+    const o = out[k];
+    if (!o || typeof o !== 'object') { out[k] = null; continue; }
+    for (const [kk, vv] of Object.entries(o)) if (vv === '') o[kk] = null;
+    if (Object.values(o).every(v => v === null || blank(v))) out[k] = null;
+  }
   if (out.font?.candidates) out.font.candidates = out.font.candidates.map(c => ({ name: c.name || c.family || c.font || '', confidence: Number(c.confidence) || 0, reason: c.reason || '' })).filter(c => c.name);
   if (!Array.isArray(out.observations)) out.observations = [];
   out.tags = Array.from(new Set((out.tags || []).map(t => String(t).toLowerCase().trim()).filter(Boolean))).slice(0, 8);
