@@ -4,7 +4,7 @@ import { transcribe } from './transcribe.js';
 import { classify } from './brain.js';
 import { resolveLink } from './resolvers/link.js';
 import { lookupTrack, lookupAlbum } from './resolvers/song.js';
-import { resolveBook, resolveFont, resolvePlace } from './resolvers/misc.js';
+import { resolveBook, resolveFont, resolvePlace, resolveStyle, resolveArtwork } from './resolvers/misc.js';
 
 const attempt = async (label, fn, fallback) => {
   try { return await fn(); }
@@ -96,6 +96,22 @@ export async function processItem(env, id, origin) {
         if (!top || top.confidence < 0.85) needsConfirm = true;
         break;
       }
+      case 'style': {
+        resolved = await attempt('style', () => resolveStyle(env, brain.style || { name: brain.title, search_query: brain.title }), brain.style || {});
+        if (resolved.image) {
+          const m = await attempt('style image', () => putMediaFromUrl(env, id, 'image', resolved.image));
+          if (m) media.push(m);
+        }
+        break;
+      }
+      case 'artwork': {
+        resolved = await attempt('artwork', () => resolveArtwork(env, brain.artwork || { search_query: brain.title }), brain.artwork || {});
+        if (resolved.image) {
+          const m = await attempt('artwork image', () => putMediaFromUrl(env, id, 'image', resolved.image));
+          if (m) media.push(m);
+        }
+        break;
+      }
       case 'thing':
         resolved = { ...(brain.thing || {}) };
         if (resolved.search_query) resolved.search_url = `https://www.google.com/search?q=${encodeURIComponent(resolved.search_query)}`;
@@ -111,6 +127,7 @@ export async function processItem(env, id, origin) {
         resolved = {};
     }
 
+    if (brain.observations?.length) resolved.observations = brain.observations.slice(0, 6);
     await updateItem(env, id, {
       kind: brain.kind,
       title: brain.title || item.title,

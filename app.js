@@ -1,5 +1,5 @@
 const API = 'https://bagofholding-api.bensonperry.workers.dev';
-const KINDS = ['idea', 'song_moment', 'font', 'thing', 'link', 'book', 'film', 'album', 'place', 'quote'];
+const KINDS = ['idea', 'song_moment', 'font', 'style', 'artwork', 'thing', 'link', 'book', 'film', 'album', 'place', 'quote'];
 const KIND_LABEL = { song_moment: 'song moment' };
 
 const state = { items: [], tags: [], kind: null, tag: null, q: '', authed: false };
@@ -68,6 +68,14 @@ function card(item) {
       top = t ? `<img class="thumb wide" src="${t.url}" alt="" loading="lazy">` : '';
       body = `<div class="title">${esc(r.title || item.title)}</div><div class="sub">${esc(r.site || '')}</div>`;
       break;
+    case 'style':
+      top = t ? `<img class="thumb wide" src="${t.url}" alt="" loading="lazy">` : '';
+      body = `<div class="title">${esc(r.name || item.title)}</div><div class="sub">${esc([r.era, (r.traits || []).slice(0, 3).join(', ')].filter(Boolean).join(' · '))}</div>`;
+      break;
+    case 'artwork':
+      top = t ? `<img class="thumb" src="${t.url}" alt="" loading="lazy">` : '';
+      body = `<div class="title">${esc(r.title || item.title)}</div><div class="sub">${esc([r.artist, r.year].filter(Boolean).join(', '))}</div>`;
+      break;
     default:
       top = t ? `<img class="thumb${item.kind === 'thing' || item.kind === 'place' ? ' wide' : ''}" src="${t.url}" alt="" loading="lazy">` : '';
       body = `<div class="title">${esc(item.title)}</div>${item.summary ? `<div class="sub">${esc(item.summary)}</div>` : ''}`;
@@ -121,6 +129,19 @@ function openDetail(id) {
   if (item.kind === 'film') h += `<div class="row">${r.year ? esc(r.year) : ''}${r.search_url ? ` · <a href="${r.search_url}" target="_blank" rel="noopener">find it</a>` : ''}</div>`;
   if (item.kind === 'album') h += `<div class="row">${esc(r.artist || '')}${r.year ? ` · ${r.year}` : ''}${r.itunes_url ? ` · <a href="${r.itunes_url}" target="_blank" rel="noopener">apple music</a>` : ''}</div>`;
   if (item.kind === 'place') h += `<div class="row">${r.map_url ? `<a href="${r.map_url}" target="_blank" rel="noopener">map</a>` : ''}</div>`;
+  if (item.kind === 'style') {
+    h += `<div class="row">${esc(r.era || '')}</div>`;
+    if (r.traits?.length) h += `<div class="text" style="font-size:14px">${r.traits.map(esc).join(' · ')}</div>`;
+    if (r.extract) h += `<div class="text" style="font-size:14px;color:var(--muted)">${esc(r.extract)}</div>`;
+    h += `<div class="row">${r.url ? `<a href="${r.url}" target="_blank" rel="noopener">wikipedia</a> · ` : ''}${r.search_url ? `<a href="${r.search_url}" target="_blank" rel="noopener">more like this</a>` : ''}</div>`;
+    if (r.related?.length) h += `<div class="row">related: ${r.related.map(esc).join(', ')}</div>`;
+  }
+  if (item.kind === 'artwork') {
+    h += `<div class="row">${esc([r.artist, r.year, r.medium, r.movement].filter(Boolean).join(' · '))}</div>`;
+    if (r.extract) h += `<div class="text" style="font-size:14px;color:var(--muted)">${esc(r.extract)}</div>`;
+    h += `<div class="row">${r.url ? `<a href="${r.url}" target="_blank" rel="noopener">wikipedia</a> · ` : ''}${r.search_url ? `<a href="${r.search_url}" target="_blank" rel="noopener">find it</a>` : ''}</div>`;
+  }
+  if (r.observations?.length) h += `<div class="row obs">${r.observations.map(o => `<span><b>${esc(o.label)}</b> ${esc(o.value)}</span>`).join('')}</div>`;
   if (item.status === 'failed') h += `<div class="row status failed">failed: ${esc(item.error || '')}</div>`;
   h += `<div class="row">${item.tags.map(t => `<span>#${esc(t)}</span>`).join(' ')}</div>`;
 
@@ -129,8 +150,7 @@ function openDetail(id) {
   if (s.text) h += `<div>${esc(s.text)}</div>`;
   if (s.note) h += `<div>${esc(s.note)}</div>`;
   if (audio) h += `<audio controls preload="none" src="${audio.url}"></audio>`;
-  if (photo && !(cover || image) ) h += `<img class="hero" src="${photo.url}" alt="" style="margin-top:8px">`;
-  else if (photo) h += `<div class="row"><a href="${photo.url}" target="_blank" rel="noopener">original photo</a></div>`;
+  if (photo) h += `<img class="hero" src="${photo.url}" alt="" style="margin-top:8px; max-height: 320px">`;
   h += `</div>`;
 
   if (state.authed) {

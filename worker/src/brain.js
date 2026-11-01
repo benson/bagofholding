@@ -1,13 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-export const KINDS = ['idea', 'song_moment', 'font', 'thing', 'link', 'book', 'film', 'album', 'place', 'quote'];
+export const KINDS = ['idea', 'song_moment', 'font', 'style', 'artwork', 'thing', 'link', 'book', 'film', 'album', 'place', 'quote'];
 
 const SYSTEM = `You are the brain of Bag of Holding, a personal collection for Benson. He captures a fleeting reaction with as little effort as possible: a mumbled sentence, a quick photo, a typed fragment. Your job is to work out what he actually wants to keep and describe the real object, not the capture.
 
 The raw capture is provenance. The item is the resolved thing:
 - "I love 30 seconds to 50 seconds of Song X by Y" is a song_moment: the track and the time range. A single timestamp means a 10 second clip starting there. Convert all times to seconds.
 - A photo plus "I like this font" is a font: identify the typeface in the photo. Give up to 3 candidate families with confidence 0 to 1 and a short reason each. Set needs_confirm unless the top candidate is above 0.85.
-- A photo of an object, product, poster, building, room or garment with no other instruction is a thing: say what it is, who makes it if you can tell, and a web search query that would find it. If the words name a specific aspect ("the chair", "those tiles"), resolve that aspect, not the whole scene.
+- A photo plus words about the look, the vibe, the era or the movement ("what style is this", "I love this aesthetic", "this kind of building") is a style: name the style precisely (brutalism, art deco, memphis, frutiger aero, mid-century modern, swiss style, wabi-sabi, y2k, ...), give its era, 3 to 5 traits visible in the photo, and closely related styles. Prefer the most specific name that is still correct over a broad one. A building with no words is usually a style unless it is a famous landmark, which is a place.
+- A photo of a painting, print, photograph, sculpture or illustration is an artwork: title, artist, year and medium if you can identify it; otherwise the closest movement and a search query.
+- A photo of an object, product, poster, room, garment, plant or vehicle with no other instruction is a thing: say what it is, who makes it if you can tell, a category (product, furniture, garment, plant, animal, vehicle, packaging, sign, food, ...), and a web search query that would find it. If the words name a specific aspect ("the chair", "those tiles"), resolve that aspect, not the whole scene.
+- Whatever the kind, when there is a photo also fill observations: short labeled facts about anything else you can suss out that he might care about later: typeface, style or era, color palette, material, maker, location, photographer. Only confident, useful ones; 0 to 6 of them. Skip the obvious.
 - A URL or "that site X" is a link.
 - A book, film or album title is book, film or album.
 - "This place" or a named venue is a place.
@@ -36,6 +39,9 @@ function schema() {
       song: nullable(obj({ artist: str, track: str, album: nullable(str), start_s: num, end_s: num })),
       link: nullable(obj({ url: str })),
       font: nullable(obj({ candidates: { type: 'array', items: obj({ name: str, confidence: num, reason: str }) } })),
+      style: nullable(obj({ name: str, era: nullable(str), traits: { type: 'array', items: str }, related: { type: 'array', items: str }, search_query: str })),
+      artwork: nullable(obj({ title: nullable(str), artist: nullable(str), year: nullable(str), medium: nullable(str), movement: nullable(str), search_query: str })),
+      observations: { type: 'array', items: obj({ label: str, value: str }) },
       thing: nullable(obj({ what: str, maker: nullable(str), category: str, search_query: str })),
       book: nullable(obj({ title: str, author: nullable(str) })),
       film: nullable(obj({ title: str, year: nullable(str) })),

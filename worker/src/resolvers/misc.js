@@ -40,3 +40,38 @@ export async function resolvePlace(env, { name, query }, location) {
   else out.map_url = `https://maps.apple.com/?q=${encodeURIComponent(query || name)}`;
   return out;
 }
+
+// First Wikipedia hit for a query: title, url, intro and lead image.
+export async function wikipedia(query) {
+  const h = { 'user-agent': 'bagofholding/1.0 (benson.perry@gmail.com)' };
+  const sr = await fetch(`https://en.wikipedia.org/w/api.php?action=query&list=search&srlimit=1&format=json&srsearch=${encodeURIComponent(query)}`, { headers: h });
+  if (!sr.ok) throw new Error(`wikipedia ${sr.status}`);
+  const title = (await sr.json()).query?.search?.[0]?.title;
+  if (!title) return null;
+  const pr = await fetch(`https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageimages&exintro=1&explaintext=1&exsentences=3&piprop=original&format=json&titles=${encodeURIComponent(title)}`, { headers: h });
+  const page = Object.values((await pr.json()).query?.pages || {})[0] || {};
+  return {
+    title,
+    url: `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`,
+    extract: page.extract || null,
+    image: page.original?.source || null,
+  };
+}
+
+export async function resolveStyle(env, style) {
+  const out = { ...style };
+  const w = await wikipedia(`${style.name} ${/architect|building|house|tower/i.test(style.search_query || '') ? 'architecture' : 'design style'}`).catch(() => null)
+    || await wikipedia(style.name).catch(() => null);
+  if (w) Object.assign(out, { wikipedia_title: w.title, url: w.url, extract: w.extract, image: w.image });
+  out.search_url = `https://www.google.com/search?q=${encodeURIComponent(style.search_query || style.name)}&tbm=isch`;
+  return out;
+}
+
+export async function resolveArtwork(env, art) {
+  const out = { ...art };
+  const q = [art.title, art.artist].filter(Boolean).join(' ');
+  const w = q ? await wikipedia(q).catch(() => null) : null;
+  if (w) Object.assign(out, { wikipedia_title: w.title, url: w.url, extract: w.extract, image: w.image });
+  out.search_url = `https://www.google.com/search?q=${encodeURIComponent(art.search_query || q)}`;
+  return out;
+}
