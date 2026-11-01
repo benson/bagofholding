@@ -32,9 +32,14 @@ const fmt = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2,
 // The worker's Cloudflare IP gets rate-limited by itunes; a home IP doesn't.
 async function itunes(artist, track, album) {
   try {
-    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent([artist, track].filter(Boolean).join(' '))}&entity=song&limit=5`);
-    if (!res.ok) return null;
-    const { results } = await res.json();
+    let results = [];
+    for (const term of [[artist, track].filter(Boolean).join(' '), track]) {
+      if (!term) continue;
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=5`);
+      if (!res.ok) continue;
+      results = (await res.json()).results || [];
+      if (results.length) break;
+    }
     const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const hit = results.find(h => norm(h.collectionName) === norm(album)) || results[0];
     if (!hit) return null;
