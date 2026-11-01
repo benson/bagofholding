@@ -9,16 +9,15 @@ struct CapturePayload {
     var location: (lat: Double, lng: Double)?
 }
 
-/// Builds a multipart body on disk and hands it to a background URLSession,
+/// Builds a multipart body and sends it with a short background-time grant,
 /// so the app can be dismissed the moment the button is released.
-final class Uploader: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
+final class Uploader: NSObject {
     static let shared = Uploader()
     private lazy var session: URLSession = {
-        let config = URLSessionConfiguration.background(withIdentifier: "com.bensonperry.bagofholding.upload")
-        config.isDiscretionary = false
-        config.sessionSendsLaunchEvents = true
+        let config = URLSessionConfiguration.default
         config.waitsForConnectivity = true
-        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+        config.timeoutIntervalForResource = 120
+        return URLSession(configuration: config)
     }()
     var onFinish: ((Error?) -> Void)?
 
@@ -44,23 +43,29 @@ final class Uploader: NSObject, URLSessionDelegate, URLSessionTaskDelegate {
         if let img = payload.image, let jpeg = img.resized(maxSide: 1600).jpegData(compressionQuality: 0.85) { file("photo", "photo.jpg", "image/jpeg", jpeg) }
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
-        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("upload-\(UUID().uuidString).body")
-        try body.write(to: tmp)
         if let a = payload.audioURL { try? FileManager.default.removeItem(at: a) }
 
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("Bearer \(Settings.key)", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        session.uploadTask(with: req, fromFile: tmp).resume()
-    }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        var err = error
-        if err == nil, let http = task.response as? HTTPURLResponse, http.statusCode >= 300 {
-            err = NSError(domain: "uploader", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "server said \(http.statusCode)"])
+        var bgTask = UIBackgroundTaskIdentifier.invalid
+        bgTask = UIApplication.shared.beginBackgroundTask(withName: "capture upload") {
+            UIApplication.shared.endBackgroundTask(bgTask)
+            bgTask = .invalid
         }
-        DispatchQueue.main.async { self.onFinish?(err) }
+        session.uploadTask(with: req, from: body) { [weak self] data, response, error in
+            var err = error
+            if err == nil, let http = response as? HTTPURLResponse, http.statusCode >= 300 {
+                let detail = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
+                err = NSError(domain: "uploader", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "server said \(http.statusCode) \(detail.prefix(80))"])
+            }
+            DispatchQueue.main.async {
+                self?.onFinish?(err)
+                if bgTask != .invalid { UIApplication.shared.endBackgroundTask(bgTask); bgTask = .invalid }
+            }
+        }.resume()
     }
 }
 

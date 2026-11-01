@@ -9,7 +9,7 @@ struct BagOfHoldingApp: App {
         WindowGroup {
             CaptureView()
                 .environmentObject(model)
-                .preferredColorScheme(nil)
+                .onAppear { model.becameActive() }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.becameActive() }

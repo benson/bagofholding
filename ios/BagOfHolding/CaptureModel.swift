@@ -1,5 +1,8 @@
 import SwiftUI
 import UIKit
+import os
+
+let log = Logger(subsystem: "com.bensonperry.bagofholding", category: "capture")
 
 @MainActor
 final class CaptureModel: ObservableObject {
@@ -24,7 +27,7 @@ final class CaptureModel: ObservableObject {
     private init() {
         Uploader.shared.onFinish = { [weak self] err in
             guard let self else { return }
-            if let err { self.phase = .failed(err.localizedDescription) } else { self.phase = .sent; Task { await self.loadRecent() } }
+            if let err { log.error("upload failed: \(err.localizedDescription)"); self.phase = .failed(err.localizedDescription) } else { log.info("upload done"); self.phase = .sent; Task { await self.loadRecent() } }
             self.scheduleReset()
         }
     }
@@ -32,8 +35,15 @@ final class CaptureModel: ObservableObject {
     // MARK: lifecycle
 
     func becameActive() {
+        log.info("active; configured=\(Settings.isConfigured)")
         location.refresh()
         Task { await loadRecent() }
+        // Launch argument for scripted simulator checks: -debugSend "some text"
+        if let t = UserDefaults.standard.string(forKey: "debugSend"), !t.isEmpty {
+            UserDefaults.standard.removeObject(forKey: "debugSend")
+            text = t
+            sendText()
+        }
         if autoRecordRequested {
             autoRecordRequested = false
             Task { await startRecording(auto: true) }
@@ -111,6 +121,7 @@ final class CaptureModel: ObservableObject {
     }
 
     private func send(_ payload: CapturePayload) {
+        log.info("send text=\(payload.text ?? "", privacy: .public) audio=\(payload.audioURL != nil) photo=\(payload.image != nil)")
         phase = .sending
         do {
             try Uploader.shared.send(payload)
