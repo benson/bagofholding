@@ -38,6 +38,9 @@ final class CaptureModel: ObservableObject {
         log.info("active; configured=\(Settings.isConfigured)")
         location.refresh()
         Task { await loadRecent() }
+        // Launch arguments -key / -server (from a scripted install) land in the argument domain; persist them.
+        if CommandLine.arguments.contains("-key") { Settings.key = Settings.key }
+        if CommandLine.arguments.contains("-server") { Settings.server = Settings.server }
         // Launch argument for scripted simulator checks: -debugSend "some text"
         if let t = UserDefaults.standard.string(forKey: "debugSend"), !t.isEmpty {
             UserDefaults.standard.removeObject(forKey: "debugSend")
