@@ -48,7 +48,7 @@ async function runLookup(env, item, lookup, brain) {
       const prev = item.resolved?.song || {};
       const t = await attempt('itunes', () => lookupTrack(env, { artist: args.artist, track: args.track || query, album: args.album }))
         || (prev.itunes_url ? prev : null);
-      const song = { ...prev, artist: t?.artist || args.artist, track: t?.track || args.track || query, album: t?.album || args.album, start_s: start, end_s: end };
+      const song = { ...prev, artist: t?.artist || args.artist || '', track: t?.track || args.track || query, album: t?.album || args.album || '', start_s: start, end_s: end };
       const hasClip = item.media.some(m => m.role === 'clip');
       const hasCover = item.media.some(m => m.role === 'cover') || !!t?.artwork;
       if (!hasClip || !hasCover || !song.itunes_url) {
@@ -102,7 +102,7 @@ export async function processItem(env, id, origin) {
       confidence: brain.confidence,
     };
     let candidates = brain.candidates;
-    let needsConfirm = brain.needs_confirm;
+    let needsConfirm = brain.needs_confirm && brain.candidates.length > 0;
     let image = null;
 
     for (const lookup of brain.lookups) {

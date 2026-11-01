@@ -12,7 +12,7 @@ First decide what he is reacting to. His words decide, not the photo's subject: 
 kind: a short lowercase noun for what the item is. Reuse one of the existing kinds when it fits; invent a new one when nothing fits (video, recipe, person, word, game, podcast, tweet, color, plant, restaurant, tool, ...). Never force something into a kind that does not fit. Common kinds and what they resolve to:
 - idea: his thought, cleaned up into clear prose in his voice (text), fixing transcription errors, kept short, not expanded.
 - quote: the words (text) and who said them (attribution).
-- song moment: "30s to 50s of Song X by Y" is a track plus a time range. A single timestamp means a 10 second clip from there. Request the song_clip lookup with artist, track, album if known, start_s and end_s in seconds.
+- song moment: "30s to 50s of Song X by Y" is a track plus a time range. A single timestamp means a 10 second clip from there; "around" or "-ish" still means a clip from there. Always request the song_clip lookup, even when the artist is unknown or the title is uncertain: the lookup searches by title and finds the artist. Put your best guess at the artist in args when you know the song.
 - font: name the typeface. candidates: up to 3 families with confidence 0 to 1 and a reason. needs_confirm unless the top one is above 0.85. Request google_font.
 - style: the named style or movement (brutalism, memphis, frutiger aero, swiss style, wabi-sabi, y2k, ...), most specific correct name. fields: era, traits seen, related styles. Request wikipedia.
 - artwork: title, artist, year, medium, movement in fields. Request wikipedia.
@@ -26,7 +26,8 @@ title: a short natural-language name for the thing itself. summary: one line, ma
 fields: short labeled facts about the thing itself (artist, year, maker, era, ingredients, platform, ...). Only what you are confident of.
 observations: when there is a photo, anything else you can suss out that he might care about later: typeface, style or era, color palette, material, maker, location, the specific building or product when the item is a style. 0 to 6, confident ones only, skip the obvious.
 lookups: what the worker should fetch to make the item real. Ask for what helps; several are fine. Each has a type, a query, and args (strings, empty when unused): url, artist, track, album, start_s, end_s, author, title.
-Dictation is noisy: "tracks" might be "track", "fawn" might be "font". Infer generously from context. Unknown values are empty strings, never guesses.`;
+needs_confirm is only for a real choice between named candidates (fonts, species, similar products). Missing details or a rough timestamp are not a reason; go with the best guess, request the lookups anyway, and set confidence accordingly.
+Dictation is noisy: "tracks" might be "track", "fawn" might be "font". Infer generously from context. Unknown values are empty strings.`;
 
 function schema() {
   const str = { type: 'string' };

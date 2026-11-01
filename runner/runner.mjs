@@ -32,7 +32,7 @@ const fmt = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2,
 // The worker's Cloudflare IP gets rate-limited by itunes; a home IP doesn't.
 async function itunes(artist, track, album) {
   try {
-    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(`${artist} ${track}`)}&entity=song&limit=5`);
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent([artist, track].filter(Boolean).join(' '))}&entity=song&limit=5`);
     if (!res.ok) return null;
     const { results } = await res.json();
     const norm = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -66,8 +66,10 @@ async function handle(job) {
       return;
     }
     const range = `${fmt(start_s ?? 0)}-${fmt(end_s ?? (start_s ?? 0) + 10)}`;
-    const args = [SONG_CLIP, `${artist} ${track}`, range, '--out', tmp];
-    if (album) args.push('--album', album);
+    // Prefer the names itunes just resolved; fall back to whatever the brain heard.
+    const query = [meta.artist || artist, meta.track || track].filter(Boolean).join(' ');
+    const args = [SONG_CLIP, query, range, '--out', tmp];
+    if (meta.album || album) args.push('--album', meta.album || album);
     log('clip', artist, '—', track, range);
     const out = await run('node', args);
     const mp4 = (await readdir(tmp)).find(f => f.endsWith('.mp4'));
