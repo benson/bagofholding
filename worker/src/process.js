@@ -17,7 +17,7 @@ async function runLookup(env, item, lookup, brain) {
   switch (type) {
     case 'wikipedia': {
       const w = await wikipedia(query || item.title);
-      return w ? { links: [{ label: 'wikipedia', url: w.url }], image: w.image, extract: w.extract, wikipedia_title: w.title } : null;
+      return w ? { links: [{ label: `wikipedia: ${w.title.toLowerCase()}`, url: w.url }], image: w.image, extract: w.extract, wikipedia_title: w.title } : null;
     }
     case 'unfurl': {
       const url = args.url || query.match(/https?:\/\/\S+/)?.[0];
@@ -45,11 +45,13 @@ async function runLookup(env, item, lookup, brain) {
     case 'song_clip': {
       const start = Number(args.start_s) || 0;
       const end = Number(args.end_s) || start + 10;
-      const t = await attempt('itunes', () => lookupTrack(env, { artist: args.artist, track: args.track || query, album: args.album }));
-      const song = { artist: t?.artist || args.artist, track: t?.track || args.track || query, album: t?.album || args.album, start_s: start, end_s: end };
+      const prev = item.resolved?.song || {};
+      const t = await attempt('itunes', () => lookupTrack(env, { artist: args.artist, track: args.track || query, album: args.album }))
+        || (prev.itunes_url ? prev : null);
+      const song = { ...prev, artist: t?.artist || args.artist, track: t?.track || args.track || query, album: t?.album || args.album, start_s: start, end_s: end };
       const hasClip = item.media.some(m => m.role === 'clip');
       const hasCover = item.media.some(m => m.role === 'cover') || !!t?.artwork;
-      if (!hasClip || !hasCover) {
+      if (!hasClip || !hasCover || !song.itunes_url) {
         const pending = await env.DB.prepare(`SELECT 1 FROM jobs WHERE item_id = ? AND status IN ('queued','running')`).bind(item.id).first();
         if (!pending) await enqueueJob(env, item.id, 'song_clip', { ...song, have_clip: hasClip });
       }
@@ -130,7 +132,8 @@ export async function processItem(env, id, origin) {
       const m = await attempt('image', () => putMediaFromUrl(env, id, 'image', image));
       if (m) media.push(m);
     }
-    if (!resolved.links.length && !photo && !resolved.text) {
+    if (brain.kind === 'link' && resolved.page_title && (!brain.title || brain.title.toLowerCase() === (resolved.site || '').toLowerCase())) brain.title = resolved.page_title;
+    if (!resolved.links.length && !photo && !resolved.text && !resolved.song) {
       const q = `${brain.title} ${brain.summary}`.trim();
       resolved.links.push({ label: 'search', url: `https://www.google.com/search?q=${encodeURIComponent(q)}` });
     }

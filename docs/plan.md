@@ -37,34 +37,32 @@ Capture path: client uploads → worker stores the original in R2 and an `items`
 item {
   id, kind, status, created_at,
   title, summary, tags[],
-  source   { modality: voice|text|photo, transcript, text, media_key, said_at },
-  resolved { ...kind-specific, see below },
-  media[]  { role: original|clip|specimen|thumb|cover, r2_key, mime },
-  candidates[]   // when needs_confirm
+  source   { modality: voice|text|photo, transcript, text, note, photo_key, audio_key, location },
+  resolved { text, attribution, fields[{label, value}], links[{label, url}], extract,
+             observations[{label, value}], name, song{artist, track, album, start_s, end_s, clip}, ... },
+  media[]  { role: photo|audio|clip|cover|image, key, type },
+  candidates[{name, confidence, reason, url?}]   // when needs_confirm
   public: bool
 }
 ```
 
-Kinds and what "resolved" means for each:
+Kinds are open-ended (decided 2026-11-01): the brain names the kind itself, reusing kinds already in the bag when one fits and inventing one when nothing does (video, recipe, word, person, game, podcast, ...). There is no enum. What makes an item "real" is the lookups the brain requests, not the kind:
 
-| kind | input looks like | resolved object |
-|---|---|---|
-| idea | "idea: ..." / anything with no referent | cleaned text, title, tags |
-| song_moment | "30s to 50s of X by Y" | track (itunes match), cover, range, 1080² clip in R2 |
-| font | photo + "this font" / "what font is this" | family name, foundry, specimen image, where to get it, confidence + candidates |
-| style | photo + "this style" / "this look" / "this vibe" | the named style or movement (brutalism, memphis, frutiger aero), era, traits seen, related styles, wikipedia summary |
-| artwork | photo of a painting, print, photo, sculpture | title, artist, year, medium, movement, wikipedia summary and image |
-| thing | photo of an object, product, poster, building | what it is, maker, link if purchasable, the photo as media |
-| link | a URL, or "that site X" | title, description, screenshot, hostname |
-| book / film / album | a title | canonical record with cover art |
-| place | "this place" + location, or a name | name, map link, photo |
-| quote | "quote: ..." / attribution words | text + who said it |
+| lookup | what it fetches |
+|---|---|
+| wikipedia | canonical page, 3-sentence summary, lead image |
+| unfurl | a URL's title, description, og:image |
+| itunes_track / itunes_album | track or album record, artwork, Apple Music link |
+| openlibrary | book record, cover, Open Library link |
+| google_font | whether each candidate family is on Google Fonts, specimen link |
+| song_clip | queues the runner job: track lookup, cover, clip |
+| web | a second Claude call with web search that returns the one canonical page for something only described ("that video where X reviews Y") |
 
-Kinds are an enum in one place; adding one is a resolver file plus a card template.
+The page has special cards for font (specimen), idea, quote and song moment (clip); everything else gets the generic card: image, title, summary or first facts, tags, then fields, links, Wikipedia summary and observations on the detail. Filter chips come from the kinds present in the data.
 
 ### The brain
 
-One Claude call with the transcript (or text), the photo if any, and the kind list. It returns kind, title, tags, a one-line summary, and resolver arguments (song title + artist + range; URL; "identify the object"; etc.). A second cheap call is not needed; tags come out of the first.
+One Claude call (Opus 5.5, high effort, structured output) with the transcript or text, the photo if any, the existing kinds and tags. It returns kind, title, summary, tags, free-form fields, observations (anything else sussed from a photo: typeface, era, palette, maker, the specific building when the item is a style), candidates when unsure, and the lookups to run. The structured-output schema must avoid nullable unions (API cap of 16), so unused values are empty strings.
 
 Tagging rules live in the prompt: a small controlled vocabulary for themes (typography, music, product, architecture, writing, ...) plus free tags. Existing tags are passed in so the model reuses them instead of inventing synonyms.
 
