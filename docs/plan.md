@@ -52,6 +52,8 @@ Kinds and what "resolved" means for each:
 | idea | "idea: ..." / anything with no referent | cleaned text, title, tags |
 | song_moment | "30s to 50s of X by Y" | track (itunes match), cover, range, 1080² clip in R2 |
 | font | photo + "this font" / "what font is this" | family name, foundry, specimen image, where to get it, confidence + candidates |
+| style | photo + "this style" / "this look" / "this vibe" | the named style or movement (brutalism, memphis, frutiger aero), era, traits seen, related styles, wikipedia summary |
+| artwork | photo of a painting, print, photo, sculpture | title, artist, year, medium, movement, wikipedia summary and image |
 | thing | photo of an object, product, poster, building | what it is, maker, link if purchasable, the photo as media |
 | link | a URL, or "that site X" | title, description, screenshot, hostname |
 | book / film / album | a title | canonical record with cover art |
@@ -114,7 +116,7 @@ Because the item resolves without the clip, a runner outage degrades to "clip pe
 
 ## Status
 
-2026-11-01: phase 0 live and verified end to end. Text, voice (Whisper) and link captures resolve; a song moment produced a clip through the Mac runner. Two environment facts learned: itunes rate-limits Cloudflare's egress (the runner does that lookup instead), and youtube refuses anonymous yt-dlp, so `~/.config/yt-dlp/config` carries Chrome cookies and a node JS runtime (see the song-clip skill). Not yet exercised: photo captures (font, thing), book/film/album/place.
+2026-11-01: phase 0 live and verified end to end, including photos. Text, voice (Whisper), link, song moment (clip via the Mac runner), font (candidates + one-tap confirm), style (Brutalism from a photo of Boston City Hall plus "love this style of building"), artwork (The Great Wave) and thing (Eames lounge chair) all resolve. Every photo also yields observations (typeface, era, maker, material, palette, location) shown on the item. Environment facts: itunes rate-limits Cloudflare's egress (the runner does that lookup); youtube refuses anonymous yt-dlp, so `~/.config/yt-dlp/config` carries Chrome cookies and a node JS runtime (see the song-clip skill); the structured-output schema must avoid nullable unions (API cap of 16). Not yet exercised: book, film, album, place with a real photo, and the app on a phone.
 
 ## Phases
 
