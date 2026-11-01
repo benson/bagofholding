@@ -18,6 +18,7 @@ targets:
     platform: iOS
     sources:
       - path: BagOfHolding
+      - path: Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.bensonperry.bagofholding
@@ -36,8 +37,10 @@ targets:
     deploymentTarget: '18.0'
     sources:
       - path: BagOfHoldingControls
+      - path: Shared
     settings:
       base:
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: CONTROLS_EXTENSION
         PRODUCT_BUNDLE_IDENTIFIER: com.bensonperry.bagofholding.controls
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: BagOfHoldingControls/Info.plist

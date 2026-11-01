@@ -54,11 +54,13 @@ final class CaptureModel: ObservableObject {
     }
 
     func wentToBackground() {
+        log.info("background; phase=\(String(describing: self.phase), privacy: .public)")
         if phase == .recording { Task { await stopAndSend() } }
     }
 
     /// Called by the action-button intent before the app is in the foreground.
     func requestAutoRecord() {
+        log.info("auto record requested; state=\(UIApplication.shared.applicationState.rawValue) phase=\(String(describing: self.phase), privacy: .public)")
         autoRecordRequested = true
         if UIApplication.shared.applicationState == .active {
             autoRecordRequested = false
@@ -69,10 +71,11 @@ final class CaptureModel: ObservableObject {
     // MARK: recording
 
     func startRecording(auto: Bool = false) async {
-        guard phase != .recording else { return }
+        guard phase != .recording else { log.info("start ignored, already recording"); return }
         guard await recorder.requestPermission() else { fail("microphone not allowed"); return }
         do {
             try recorder.start()
+            log.info("recording started auto=\(auto)")
             autoRecording = auto
             phase = .recording
             elapsed = 0
@@ -92,17 +95,20 @@ final class CaptureModel: ObservableObject {
     }
 
     func stopAndSend() async {
+        log.info("stopAndSend phase=\(String(describing: self.phase), privacy: .public) elapsed=\(self.elapsed)")
         guard phase == .recording else { return }
         meter?.invalidate(); meter = nil
         level = 0
         autoRecording = false
         let url = recorder.stop()
+        log.info("recorder stopped, file=\(url != nil)")
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         guard url != nil || pendingImage != nil else { phase = .idle; return }
         send(CapturePayload(text: nil, note: text.isEmpty ? nil : text, audioURL: url, image: pendingImage, location: location.last))
     }
 
     func cancelRecording() {
+        log.info("recording cancelled")
         meter?.invalidate(); meter = nil
         level = 0
         autoRecording = false

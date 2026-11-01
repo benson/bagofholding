@@ -88,6 +88,7 @@ struct CaptureView: View {
                     if model.phase != .recording && !model.autoRecording { Task { await model.startRecording() } }
                 }
                 .onEnded { value in
+                    log.info("button released auto=\(model.autoRecording) phase=\(String(describing: model.phase), privacy: .public)")
                     if model.autoRecording {
                         Task { await model.stopAndSend() }
                     } else if model.phase == .recording {
