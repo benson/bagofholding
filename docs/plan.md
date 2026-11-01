@@ -112,6 +112,10 @@ Because the item resolves without the clip, a runner outage degrades to "clip pe
 2. Clip runner: this Mac first, home device next, cloud fallback. See above.
 3. Decided: straight to the native app, no Shortcut stage.
 
+## Status
+
+2026-11-01: phase 0 built and deployed. Worker live, page live, app builds and uploads from the simulator, runner installed on the Mac. The brain is unverified until the worker has `ANTHROPIC_API_KEY`; items captured before that sit in "needs a tap" as failed and can be rethought from the page.
+
 ## Phases
 
 0. Repo `benson/bagofholding`: worker with D1 + R2, Whisper transcription, classify + tag, `idea` and `link` resolvers, minimal web list. iOS app with hold-to-talk, text, photo, Action Button intent, background upload. Clip runner on this Mac.
