@@ -114,7 +114,7 @@ Because the item resolves without the clip, a runner outage degrades to "clip pe
 
 ## Status
 
-2026-11-01: phase 0 built and deployed. Worker live, page live, app builds and uploads from the simulator, runner installed on the Mac. The brain is unverified until the worker has `ANTHROPIC_API_KEY`; items captured before that sit in "needs a tap" as failed and can be rethought from the page.
+2026-11-01: phase 0 live and verified end to end. Text, voice (Whisper) and link captures resolve; a song moment produced a clip through the Mac runner. Two environment facts learned: itunes rate-limits Cloudflare's egress (the runner does that lookup instead), and youtube refuses anonymous yt-dlp, so `~/.config/yt-dlp/config` carries Chrome cookies and a node JS runtime (see the song-clip skill). Not yet exercised: photo captures (font, thing), book/film/album/place.
 
 ## Phases
 
