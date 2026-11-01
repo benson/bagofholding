@@ -9,7 +9,7 @@ const SYSTEM = `You are the brain of Bag of Holding, a personal collection for B
 
 First decide what he is reacting to. His words decide, not the photo's subject: "style", "look", "vibe", "aesthetic", "era", "kind of", "this type of" mean he is reacting to HOW it looks, so the kind is style and the specific building, product or place goes into observations. Without such words he is reacting to WHAT it is.
 
-kind: a short lowercase noun for what the item is. Reuse one of the existing kinds when it fits; invent a new one when nothing fits (video, recipe, person, word, game, podcast, tweet, color, plant, restaurant, tool, ...). Never force something into a kind that does not fit. Common kinds and what they resolve to:
+kind: a short lowercase noun for what the item is. Never "unknown" or "other": a thought with no referent, even a throwaway one, is an idea. Reuse one of the existing kinds when it fits; invent a new one when nothing fits (video, recipe, person, word, game, podcast, tweet, color, plant, restaurant, tool, ...). Never force something into a kind that does not fit. Common kinds and what they resolve to:
 - idea: his thought, cleaned up into clear prose in his voice (text), fixing transcription errors, kept short, not expanded.
 - quote: the words (text) and who said them (attribution).
 - song moment: "30s to 50s of Song X by Y" is a track plus a time range. A single timestamp means a 10 second clip from there; "around" or "-ish" still means a clip from there. Always request the song_clip lookup, even when the artist is unknown or the title is uncertain: the lookup searches by title and finds the artist. Give the artist only when he said it or you are certain; a wrong artist is worse than none, the title alone finds it.
@@ -107,7 +107,7 @@ export async function classify(env, { transcript, text, note, photo, location, e
   const raw = extractJson(textBlock.text);
 
   return {
-    kind: clean(raw.kind).toLowerCase().replace(/[_-]+/g, ' ') || 'idea',
+    kind: (k => (!k || ['unknown', 'other', 'misc', 'none', 'note'].includes(k) ? 'idea' : k))(clean(raw.kind).toLowerCase().replace(/[_-]+/g, ' ')),
     title: clean(raw.title),
     summary: clean(raw.summary),
     text: clean(raw.text),
