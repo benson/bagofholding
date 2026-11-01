@@ -30,7 +30,7 @@ export async function processItem(env, id, origin) {
       transcript: source.transcript, text: source.text, note: source.note, photo, location: source.location, existingTags: tags,
     });
 
-    const media = item.media.filter(m => m.role === 'original' || m.role === 'photo' || m.role === 'audio');
+    const media = item.media.filter(m => ['original', 'photo', 'audio', 'clip'].includes(m.role));
     let resolved = {};
     let candidates = [];
     let needsConfirm = !!brain.needs_confirm;
@@ -55,15 +55,19 @@ export async function processItem(env, id, origin) {
         const s = brain.song || {};
         const hit = await attempt('itunes', () => lookupTrack(env, s));
         resolved = { ...s, ...(hit || {}), start_s: s.start_s, end_s: s.end_s, clip: 'pending' };
-        if (!hit) needsConfirm = true;
         if (hit?.artwork) {
           const m = await attempt('cover', () => putMediaFromUrl(env, id, 'cover', hit.artwork));
           if (m) media.push(m);
         }
-        await enqueueJob(env, id, 'song_clip', {
-          artist: resolved.artist, track: resolved.track, album: resolved.album,
-          start_s: resolved.start_s, end_s: resolved.end_s,
-        });
+        if (item.media.some(m => m.role === 'clip')) {
+          resolved.clip = 'ready';
+        } else {
+          const pending = await env.DB.prepare(`SELECT 1 FROM jobs WHERE item_id = ? AND status IN ('queued','running')`).bind(id).first();
+          if (!pending) await enqueueJob(env, id, 'song_clip', {
+            artist: resolved.artist, track: resolved.track, album: resolved.album,
+            start_s: resolved.start_s, end_s: resolved.end_s,
+          });
+        }
         break;
       }
       case 'album': {

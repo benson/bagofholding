@@ -1,5 +1,5 @@
 import { getItem, insertItem, updateItem, listItems, allTags, claimJob, finishJob } from './db.js';
-import { putMedia, deleteItemMedia } from './media.js';
+import { putMedia, putMediaFromUrl, deleteItemMedia } from './media.js';
 import { processItem } from './process.js';
 
 const json = (data, status = 200, headers = {}) =>
@@ -140,11 +140,18 @@ export default {
         const job = await env.DB.prepare('SELECT * FROM jobs WHERE id = ?').bind(m[1]).first();
         if (!job) return respond({ error: 'not found' }, 404);
         if (m[2] === 'fail') {
-          const { error } = await req.json().catch(() => ({}));
+          const { error, meta } = await req.json().catch(() => ({}));
           await finishJob(env, job.id, job.attempts >= 3 ? 'failed' : 'queued', error);
-          if (job.attempts >= 3) {
-            const item = await getItem(env, job.item_id, origin);
-            if (item) await updateItem(env, job.item_id, { resolved: { ...item.resolved, clip: 'failed', clip_error: error || null } });
+          const item = await getItem(env, job.item_id, origin);
+          if (item) {
+            const extra = meta && typeof meta === 'object' ? meta : {};
+            const patch = { resolved: { ...item.resolved, ...extra } };
+            if (job.attempts >= 3) Object.assign(patch.resolved, { clip: 'failed', clip_error: error || null });
+            if (extra.artwork && !item.media.some(x => x.role === 'cover')) {
+              const m = await putMediaFromUrl(env, item.id, 'cover', extra.artwork).catch(() => null);
+              if (m) patch.media = [...item.media, m];
+            }
+            await updateItem(env, job.item_id, patch);
           }
           return respond({ ok: true });
         }
