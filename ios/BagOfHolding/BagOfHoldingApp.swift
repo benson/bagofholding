@@ -10,6 +10,8 @@ struct BagOfHoldingApp: App {
             CaptureView()
                 .environmentObject(model)
                 .onAppear { model.becameActive() }
+                .onOpenURL { url in if url.host == "capture" { model.requestAutoRecord() } }
+                .tint(BagStyle.accent)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.becameActive() }

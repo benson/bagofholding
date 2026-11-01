@@ -1,15 +1,15 @@
 :root {
-  --bg: #faf9f6;
-  --fg: #1a1a1a;
-  --muted: #777;
-  --line: #e4e1da;
-  --card: #fff;
-  --accent: #1a1a1a;
-  --attention: #fff6dc;
+  --bg: #f7f1e3;
+  --fg: #2b2521;
+  --muted: #8a7f72;
+  --line: #e3d9c6;
+  --card: #fffbf2;
+  --accent: #6f4fa3;
+  --attention: #efe7f7;
   --radius: 10px;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #141414; --fg: #ececec; --muted: #8a8a8a; --line: #2a2a2a; --card: #1c1c1c; --accent: #ececec; --attention: #2a2410; }
+  :root { --bg: #1d1a16; --fg: #eee5d3; --muted: #9b9183; --line: #3a342c; --card: #26221d; --accent: #b39ddb; --attention: #2d2540; }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", sans-serif; -webkit-font-smoothing: antialiased; }
@@ -18,13 +18,14 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .hidden { display: none !important; }
 .container { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
 
-header h1 { font-size: 20px; font-weight: 600; margin: 0 0 16px; letter-spacing: -0.01em; }
+header h1 { font-size: 20px; font-weight: 600; margin: 0 0 16px; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; font-family: "Iowan Old Style", "Palatino", Georgia, serif; }
+header h1 .mark { width: 28px; height: 28px; }
 .controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
 #search { flex: 1 1 200px; max-width: 320px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--fg); font: inherit; outline: none; }
 #search:focus { border-color: var(--muted); }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; color: var(--muted); background: var(--card); white-space: nowrap; }
-.chip.on { color: var(--fg); border-color: var(--fg); }
+.chip.on { color: var(--accent); border-color: var(--accent); }
 .chip .n { opacity: 0.6; margin-left: 4px; }
 .tags { margin: 6px 0 20px; max-height: 64px; overflow: hidden; }
 .tags.open { max-height: none; }
@@ -46,6 +47,7 @@ header h1 { font-size: 20px; font-weight: 600; margin: 0 0 16px; letter-spacing:
 .card .tagline { display: flex; gap: 4px; flex-wrap: wrap; margin-top: auto; padding-top: 6px; }
 .card .tagline span { font-size: 11px; color: var(--muted); }
 .card .tagline span::before { content: "#"; opacity: 0.5; }
+.card .kind { color: var(--accent); }
 .card.font .specimen { padding: 22px 12px 8px; font-size: 34px; line-height: 1.1; min-height: 110px; display: flex; align-items: flex-end; }
 .card.quote .text { font-style: italic; }
 .status { font-size: 11px; color: var(--muted); }

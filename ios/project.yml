@@ -28,3 +28,18 @@ targets:
         TARGETED_DEVICE_FAMILY: '1'
         SUPPORTS_MACCATALYST: NO
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+    dependencies:
+      - target: BagOfHoldingControls
+  BagOfHoldingControls:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: '18.0'
+    sources:
+      - path: BagOfHoldingControls
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bensonperry.bagofholding.controls
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: BagOfHoldingControls/Info.plist
+        SKIP_INSTALL: YES
+        TARGETED_DEVICE_FAMILY: '1'

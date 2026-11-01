@@ -22,11 +22,18 @@ struct CaptureView: View {
                 .padding(.bottom, 40)
             }
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle("bag of holding")
+            .background(BagStyle.paper.ignoresSafeArea())
+            .toolbarBackground(BagStyle.paper, for: .navigationBar)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Image("BagMark").resizable().scaledToFit().frame(width: 26, height: 26)
+                        Text("bag of holding").font(.system(.headline, design: .serif)).foregroundStyle(BagStyle.ink)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showSettings = true } label: { Image(systemName: "key") }
+                    Button { showSettings = true } label: { Image(systemName: "key") }.foregroundStyle(BagStyle.muted)
                 }
             }
             .sheet(isPresented: $showSettings) { SettingsView() }
@@ -54,13 +61,14 @@ struct CaptureView: View {
         let recording = model.phase == .recording
         return ZStack {
             Circle()
-                .fill(Color.primary.opacity(recording ? 0.08 : 0.04))
+                .fill(recording ? BagStyle.accentSoft : BagStyle.ink.opacity(0.05))
                 .frame(width: 240, height: 240)
                 .scaleEffect(recording ? 1 + CGFloat(model.level) * 0.25 : 1)
                 .animation(.easeOut(duration: 0.08), value: model.level)
             Circle()
-                .fill(recording ? Color.red : Color.primary)
+                .fill(recording ? BagStyle.accent : BagStyle.ink)
                 .frame(width: 168, height: 168)
+                .shadow(color: BagStyle.ink.opacity(recording ? 0 : 0.18), radius: 14, y: 8)
                 .scaleEffect(recording ? 1.04 : 1)
                 .animation(.spring(response: 0.25, dampingFraction: 0.7), value: recording)
             VStack(spacing: 6) {
@@ -71,7 +79,7 @@ struct CaptureView: View {
                     .font(.footnote)
                     .opacity(0.8)
             }
-            .foregroundStyle(Color(uiColor: .systemBackground))
+            .foregroundStyle(BagStyle.paper)
         }
         .contentShape(Circle())
         .gesture(
@@ -103,13 +111,13 @@ struct CaptureView: View {
             case .sending:
                 Text("sending")
             case .sent:
-                Text("in the bag")
+                Text("in the bag").foregroundStyle(BagStyle.accent)
             case .failed(let m):
                 Text(m).foregroundStyle(.red)
             }
         }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
+        .font(.system(.subheadline, design: .serif))
+        .foregroundStyle(BagStyle.muted)
         .frame(minHeight: 20)
     }
 
@@ -134,12 +142,13 @@ struct CaptureView: View {
                     .lineLimit(1...5)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 14).padding(.vertical, 10)
-                    .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+                    .background(BagStyle.card, in: RoundedRectangle(cornerRadius: 14))
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(BagStyle.line, lineWidth: 1))
                     .focused($textFocused)
                     .submitLabel(.send)
                     .onSubmit { model.sendText(); textFocused = false }
                 Button { model.sendText(); textFocused = false } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 32))
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 32)).foregroundStyle(BagStyle.accent)
                 }
                 .disabled(model.text.trimmingCharacters(in: .whitespaces).isEmpty && model.pendingImage == nil)
             }
@@ -149,7 +158,7 @@ struct CaptureView: View {
                 Spacer()
             }
             .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(BagStyle.muted)
         }
     }
 
@@ -157,23 +166,28 @@ struct CaptureView: View {
 
     private var recentList: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("recent").font(.footnote).foregroundStyle(.secondary)
-            ForEach(model.recent) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(item.kind.replacingOccurrences(of: "_", with: " "))
-                        .font(.caption).foregroundStyle(.secondary)
-                        .frame(width: 84, alignment: .leading)
-                    Text(item.title ?? "")
-                        .font(.subheadline).lineLimit(2)
-                    Spacer()
-                    if item.status != "resolved" {
-                        Text(item.status.replacingOccurrences(of: "_", with: " "))
-                            .font(.caption2)
-                            .foregroundStyle(item.status == "failed" ? .red : .secondary)
+            Text("recent").font(.system(.footnote, design: .serif)).foregroundStyle(BagStyle.muted)
+            VStack(spacing: 0) {
+                ForEach(Array(model.recent.enumerated()), id: \.element.id) { index, item in
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(item.kind.replacingOccurrences(of: "_", with: " "))
+                            .font(.caption).foregroundStyle(BagStyle.accent)
+                            .frame(width: 84, alignment: .leading)
+                        Text(item.title ?? "")
+                            .font(.subheadline).lineLimit(2).foregroundStyle(BagStyle.ink)
+                        Spacer()
+                        if item.status != "resolved" {
+                            Text(item.status.replacingOccurrences(of: "_", with: " "))
+                                .font(.caption2)
+                                .foregroundStyle(item.status == "failed" ? .red : BagStyle.muted)
+                        }
                     }
+                    .padding(.vertical, 10).padding(.horizontal, 14)
+                    if index < model.recent.count - 1 { Divider().overlay(BagStyle.line).padding(.leading, 14) }
                 }
-                .padding(.vertical, 4)
             }
+            .background(BagStyle.card, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(BagStyle.line, lineWidth: 1))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .refreshable { await model.loadRecent() }
@@ -200,6 +214,8 @@ struct SettingsView: View {
                     Link("browse the bag", destination: URL(string: "https://bensonperry.com/bagofholding")!)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(BagStyle.paper)
             .navigationTitle("settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

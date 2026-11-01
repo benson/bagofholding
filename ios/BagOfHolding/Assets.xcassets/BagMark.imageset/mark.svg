@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- bag body, ink, drawn loose -->
+  <path fill="#2b2521" d="M402 342 Q354 364 316 416 Q270 480 250 552 Q226 646 264 738 Q298 824 370 872 Q440 918 520 912 Q608 918 678 868 Q750 816 784 732 Q826 642 792 546 Q770 470 722 408 Q682 358 628 342 Q602 358 568 352 Q540 362 512 348 Q486 362 456 352 Q428 358 402 342 Z"/>
+  <!-- gathered, ruffled mouth -->
+  <path fill="#2b2521" d="M386 346 Q336 300 348 238 Q372 236 390 260 Q412 232 440 256 Q466 230 494 254 Q520 228 548 254 Q574 230 600 256 Q626 232 650 260 Q670 236 694 242 Q702 304 648 346 Q582 316 512 326 Q442 316 386 346 Z"/>
+  <!-- brush highlight -->
+  <path fill="none" stroke="#f7f1e3" stroke-width="18" stroke-linecap="round" opacity="0.5" d="M338 598 Q346 702 402 792"/>
+  <!-- cord around the neck, accent -->
+  <path fill="none" stroke="#6f4fa3" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" d="M372 352 Q440 396 512 398 Q586 394 652 350"/>
+  <path fill="none" stroke="#6f4fa3" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" d="M648 356 Q704 388 670 450 Q652 484 686 518"/>
+  <path fill="none" stroke="#6f4fa3" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" d="M390 360 Q358 408 394 462"/>
+  <circle cx="692" cy="532" r="20" fill="#6f4fa3"/>
+  <circle cx="398" cy="474" r="17" fill="#6f4fa3"/>
+  <!-- sparkles escaping, accent -->
+  <path fill="#6f4fa3" transform="rotate(8 512 150)" d="M512 92 Q518 142 560 148 Q518 156 512 206 Q506 156 464 148 Q506 142 512 92 Z"/>
+  <path fill="#6f4fa3" transform="rotate(-12 744 166)" d="M744 128 Q748 160 776 164 Q748 170 744 204 Q740 170 712 164 Q740 160 744 128 Z"/>
+  <path fill="#6f4fa3" transform="rotate(15 296 202)" d="M296 176 Q299 198 318 201 Q299 205 296 228 Q293 205 274 201 Q293 198 296 176 Z"/>
+  <circle cx="660" cy="98" r="9" fill="#6f4fa3"/>
+  <circle cx="350" cy="126" r="7" fill="#6f4fa3"/>
+</svg>
