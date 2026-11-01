@@ -65,6 +65,13 @@ export async function allTags(env, all) {
   return results;
 }
 
+export async function allKinds(env, all) {
+  const { results } = await env.DB.prepare(
+    `SELECT kind, COUNT(*) AS n FROM items ${all ? '' : 'WHERE public = 1'} GROUP BY kind ORDER BY n DESC, kind`
+  ).all();
+  return results;
+}
+
 export async function enqueueJob(env, itemId, type, args) {
   const now = new Date().toISOString();
   const id = crypto.randomUUID();

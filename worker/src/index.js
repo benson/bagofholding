@@ -1,4 +1,4 @@
-import { getItem, insertItem, updateItem, listItems, allTags, claimJob, finishJob } from './db.js';
+import { getItem, insertItem, updateItem, listItems, allTags, allKinds, claimJob, finishJob } from './db.js';
 import { putMedia, putMediaFromUrl, deleteItemMedia } from './media.js';
 import { processItem } from './process.js';
 
@@ -81,7 +81,7 @@ export default {
         return respond({ items, authed: auth });
       }
 
-      if (path === '/tags' && req.method === 'GET') return respond({ tags: await allTags(env, auth) });
+      if (path === '/tags' && req.method === 'GET') return respond({ tags: await allTags(env, auth), kinds: await allKinds(env, auth) });
 
       let m = path.match(/^\/items\/([0-9a-f-]{36})(?:\/(reprocess))?$/);
       if (m) {
@@ -107,7 +107,9 @@ export default {
           for (const k of ['title', 'summary', 'kind', 'public', 'tags', 'resolved']) if (k in body) patch[k] = body[k];
           if (typeof body.confirm === 'number' && item.candidates[body.confirm]) {
             const c = item.candidates[body.confirm];
-            patch.resolved = { ...item.resolved, name: c.name, url: c.url, google_fonts: c.google_fonts, confidence: 1 };
+            patch.resolved = { ...item.resolved, name: c.name, confidence: 1 };
+            if (c.url) { patch.resolved.url = c.url; patch.resolved.links = [{ label: c.google_fonts ? 'google fonts' : 'find it', url: c.url }, ...(item.resolved.links || []).filter(l => l.url !== c.url)]; }
+            if (c.google_fonts !== undefined) patch.resolved.google_fonts = c.google_fonts;
             patch.title = body.title ?? c.name;
             patch.status = 'resolved';
           }
@@ -145,8 +147,8 @@ export default {
           const item = await getItem(env, job.item_id, origin);
           if (item) {
             const extra = meta && typeof meta === 'object' ? meta : {};
-            const patch = { resolved: { ...item.resolved, ...extra } };
-            if (job.attempts >= 3) Object.assign(patch.resolved, { clip: 'failed', clip_error: error || null });
+            const patch = { resolved: { ...item.resolved, song: { ...(item.resolved.song || {}), ...extra } } };
+            if (job.attempts >= 3) Object.assign(patch.resolved.song, { clip: 'failed', clip_error: error || null });
             if (extra.artwork && !item.media.some(x => x.role === 'cover')) {
               const m = await putMediaFromUrl(env, item.id, 'cover', extra.artwork).catch(() => null);
               if (m) patch.media = [...item.media, m];
@@ -168,7 +170,10 @@ export default {
         if (cover && typeof cover !== 'string' && cover.size && !media.some(x => x.role === 'cover')) media.push(await putMedia(env, item.id, 'cover', cover.stream(), cover.type || 'image/jpeg'));
         let meta = {};
         try { meta = JSON.parse(form.get('meta') || '{}'); } catch {}
-        await updateItem(env, item.id, { media, resolved: { ...item.resolved, ...meta, clip: 'ready' } });
+        const song = { ...(item.resolved.song || {}), ...meta, clip: 'ready' };
+        const links = [...(item.resolved.links || [])];
+        if (meta.itunes_url && !links.some(l => l.url === meta.itunes_url)) links.push({ label: 'apple music', url: meta.itunes_url });
+        await updateItem(env, item.id, { media, resolved: { ...item.resolved, song, links } });
         await finishJob(env, job.id, 'done');
         return respond({ ok: true });
       }

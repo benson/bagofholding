@@ -1,15 +1,73 @@
-import { getItem, updateItem, allTags, enqueueJob } from './db.js';
+import { getItem, updateItem, allTags, allKinds, enqueueJob } from './db.js';
 import { getMediaBase64, putMediaFromUrl } from './media.js';
 import { transcribe } from './transcribe.js';
-import { classify } from './brain.js';
+import { classify, webFind } from './brain.js';
 import { resolveLink } from './resolvers/link.js';
 import { lookupTrack, lookupAlbum } from './resolvers/song.js';
-import { resolveBook, resolveFont, resolvePlace, resolveStyle, resolveArtwork } from './resolvers/misc.js';
+import { resolveBook, resolveFont, wikipedia } from './resolvers/misc.js';
 
-const attempt = async (label, fn, fallback) => {
+const attempt = async (label, fn, fallback = null) => {
   try { return await fn(); }
   catch (err) { console.warn(`${label}: ${err.message || err}`); return fallback; }
 };
+
+// Each lookup returns {links: [{label, url}], image, fields: [{label, value}], extract, ...extra} or null.
+async function runLookup(env, item, lookup, brain) {
+  const { type, query, args } = lookup;
+  switch (type) {
+    case 'wikipedia': {
+      const w = await wikipedia(query || item.title);
+      return w ? { links: [{ label: 'wikipedia', url: w.url }], image: w.image, extract: w.extract, wikipedia_title: w.title } : null;
+    }
+    case 'unfurl': {
+      const url = args.url || query.match(/https?:\/\/\S+/)?.[0];
+      if (!url) return null;
+      const l = await resolveLink(env, { url });
+      return { links: [{ label: l.site || 'open', url: l.url }], image: l.image, extract: l.description, page_title: l.title, url: l.url, site: l.site };
+    }
+    case 'itunes_track': {
+      const t = await lookupTrack(env, { artist: args.artist, track: args.track || query, album: args.album });
+      return t ? { links: [{ label: 'apple music', url: t.itunes_url }, ...(t.preview_url ? [{ label: 'preview', url: t.preview_url }] : [])], image: t.artwork, fields: [{ label: 'artist', value: t.artist }, { label: 'album', value: t.album }], track: t } : null;
+    }
+    case 'itunes_album': {
+      const a = await lookupAlbum(env, { artist: args.artist, title: args.album || args.title || query });
+      return a ? { links: [{ label: 'apple music', url: a.itunes_url }], image: a.artwork, fields: [{ label: 'artist', value: a.artist }, { label: 'year', value: a.year }], album: a } : null;
+    }
+    case 'openlibrary': {
+      const b = await resolveBook(env, { title: args.title || query, author: args.author });
+      return b ? { links: b.url ? [{ label: 'open library', url: b.url }] : [], image: b.cover, fields: [{ label: 'author', value: b.author }, { label: 'first published', value: b.year ? String(b.year) : '' }], book: b } : null;
+    }
+    case 'google_font': {
+      const names = brain.candidates.length ? brain.candidates : [{ name: query || item.title, confidence: brain.confidence, reason: '' }];
+      const f = await resolveFont(env, { candidates: names });
+      return { candidates: f.candidates, links: f.candidates[0] ? [{ label: f.candidates[0].google_fonts ? 'google fonts' : 'find it', url: f.candidates[0].url }] : [] };
+    }
+    case 'song_clip': {
+      const start = Number(args.start_s) || 0;
+      const end = Number(args.end_s) || start + 10;
+      const t = await attempt('itunes', () => lookupTrack(env, { artist: args.artist, track: args.track || query, album: args.album }));
+      const song = { artist: t?.artist || args.artist, track: t?.track || args.track || query, album: t?.album || args.album, start_s: start, end_s: end };
+      const hasClip = item.media.some(m => m.role === 'clip');
+      const hasCover = item.media.some(m => m.role === 'cover') || !!t?.artwork;
+      if (!hasClip || !hasCover) {
+        const pending = await env.DB.prepare(`SELECT 1 FROM jobs WHERE item_id = ? AND status IN ('queued','running')`).bind(item.id).first();
+        if (!pending) await enqueueJob(env, item.id, 'song_clip', { ...song, have_clip: hasClip });
+      }
+      return {
+        song: { ...song, clip: hasClip ? 'ready' : 'pending' },
+        cover: t?.artwork || null,
+        links: t?.itunes_url ? [{ label: 'apple music', url: t.itunes_url }, ...(t.preview_url ? [{ label: 'preview', url: t.preview_url }] : [])] : [],
+        fields: [{ label: 'artist', value: song.artist }, { label: 'album', value: song.album || '' }],
+      };
+    }
+    case 'web': {
+      const w = await webFind(env, query);
+      return w ? { links: [{ label: w.title || 'found it', url: w.url }], image: w.image || null, extract: w.summary, url: w.url } : null;
+    }
+    default:
+      return null;
+  }
+}
 
 export async function processItem(env, id, origin) {
   const item = await getItem(env, id, origin);
@@ -25,113 +83,58 @@ export async function processItem(env, id, origin) {
     }
 
     const photo = source.photo_key ? await getMediaBase64(env, source.photo_key) : null;
-    const tags = (await allTags(env, true)).map(r => r.tag).slice(0, 150);
+    const [tags, kinds] = await Promise.all([allTags(env, true), allKinds(env, true)]);
     const brain = await classify(env, {
-      transcript: source.transcript, text: source.text, note: source.note, photo, location: source.location, existingTags: tags,
+      transcript: source.transcript, text: source.text, note: source.note, photo, location: source.location,
+      existingTags: tags.map(r => r.tag).slice(0, 150), existingKinds: kinds.map(r => r.kind),
     });
 
-    const media = item.media.filter(m => ['original', 'photo', 'audio', 'clip', 'cover'].includes(m.role) && !(m.role === 'cover' && item.kind !== 'song_moment'));
-    let resolved = {};
-    let candidates = [];
-    let needsConfirm = !!brain.needs_confirm;
+    // Keep the capture's own media and anything a runner produced; lookups replace the rest.
+    const media = item.media.filter(m => ['photo', 'audio', 'clip', 'cover'].includes(m.role));
+    const resolved = {
+      text: brain.text || null,
+      attribution: brain.attribution || null,
+      fields: brain.fields,
+      observations: brain.observations,
+      links: [],
+      confidence: brain.confidence,
+    };
+    let candidates = brain.candidates;
+    let needsConfirm = brain.needs_confirm;
+    let image = null;
 
-    switch (brain.kind) {
-      case 'idea':
-        resolved = { text: brain.idea?.text || source.text || source.transcript || '' };
-        break;
-      case 'quote':
-        resolved = brain.quote || {};
-        break;
-      case 'link': {
-        const url = brain.link?.url || (source.text || source.transcript || '').match(/https?:\/\/\S+/)?.[0];
-        resolved = url ? await attempt('link', () => resolveLink(env, { url }), { url }) : {};
-        if (resolved.image) {
-          const m = await attempt('link image', () => putMediaFromUrl(env, id, 'image', resolved.image));
-          if (m) media.push(m);
-        }
-        break;
+    for (const lookup of brain.lookups) {
+      const r = await attempt(`lookup ${lookup.type}`, () => runLookup(env, item, lookup, brain));
+      if (!r) continue;
+      resolved.links.push(...(r.links || []).filter(l => l.url && !resolved.links.some(x => x.url === l.url)));
+      for (const f of r.fields || []) if (f.value && !resolved.fields.some(x => x.label.toLowerCase() === f.label.toLowerCase())) resolved.fields.push(f);
+      if (r.extract && !resolved.extract) resolved.extract = r.extract;
+      if (r.image && !image) image = r.image;
+      if (r.candidates) candidates = r.candidates;
+      if (r.song) resolved.song = r.song;
+      if (r.cover && !media.some(m => m.role === 'cover')) {
+        const m = await attempt('cover', () => putMediaFromUrl(env, id, 'cover', r.cover));
+        if (m) media.push(m);
       }
-      case 'song_moment': {
-        const s = brain.song || {};
-        const hit = await attempt('itunes', () => lookupTrack(env, s));
-        resolved = { ...s, ...(hit || {}), start_s: s.start_s, end_s: s.end_s, clip: 'pending' };
-        if (hit?.artwork) {
-          const m = await attempt('cover', () => putMediaFromUrl(env, id, 'cover', hit.artwork));
-          if (m) media.push(m);
-        }
-        const hasClip = media.some(m => m.role === 'clip');
-        const hasCover = media.some(m => m.role === 'cover');
-        if (hasClip) resolved.clip = 'ready';
-        if (!hasClip || !hasCover) {
-          const pending = await env.DB.prepare(`SELECT 1 FROM jobs WHERE item_id = ? AND status IN ('queued','running')`).bind(id).first();
-          if (!pending) await enqueueJob(env, id, 'song_clip', {
-            artist: resolved.artist, track: resolved.track, album: resolved.album,
-            start_s: resolved.start_s, end_s: resolved.end_s, have_clip: hasClip,
-          });
-        }
-        break;
-      }
-      case 'album': {
-        const hit = await attempt('itunes album', () => lookupAlbum(env, brain.album || {}));
-        resolved = { ...(brain.album || {}), ...(hit || {}) };
-        if (hit?.artwork) {
-          const m = await attempt('cover', () => putMediaFromUrl(env, id, 'cover', hit.artwork));
-          if (m) media.push(m);
-        }
-        break;
-      }
-      case 'book': {
-        resolved = await attempt('book', () => resolveBook(env, brain.book || {}), brain.book || {});
-        if (resolved.cover) {
-          const m = await attempt('cover', () => putMediaFromUrl(env, id, 'cover', resolved.cover));
-          if (m) media.push(m);
-        }
-        break;
-      }
-      case 'font': {
-        const f = await attempt('font', () => resolveFont(env, brain.font || { candidates: [] }), brain.font || { candidates: [] });
-        candidates = f.candidates || [];
-        const top = candidates[0];
-        resolved = top ? { name: top.name, url: top.url, google_fonts: top.google_fonts, confidence: top.confidence } : {};
-        if (!top || top.confidence < 0.85) needsConfirm = true;
-        break;
-      }
-      case 'style': {
-        resolved = await attempt('style', () => resolveStyle(env, brain.style || { name: brain.title, search_query: brain.title }), brain.style || {});
-        if (resolved.image) {
-          const m = await attempt('style image', () => putMediaFromUrl(env, id, 'image', resolved.image));
-          if (m) media.push(m);
-        }
-        break;
-      }
-      case 'artwork': {
-        resolved = await attempt('artwork', () => resolveArtwork(env, brain.artwork || { search_query: brain.title }), brain.artwork || {});
-        if (resolved.image) {
-          const m = await attempt('artwork image', () => putMediaFromUrl(env, id, 'image', resolved.image));
-          if (m) media.push(m);
-        }
-        break;
-      }
-      case 'thing':
-        resolved = { ...(brain.thing || {}) };
-        if (resolved.search_query) resolved.search_url = `https://www.google.com/search?q=${encodeURIComponent(resolved.search_query)}`;
-        break;
-      case 'film':
-        resolved = { ...(brain.film || {}) };
-        resolved.search_url = `https://www.google.com/search?q=${encodeURIComponent(`${resolved.title} ${resolved.year || ''} film`)}`;
-        break;
-      case 'place':
-        resolved = await resolvePlace(env, brain.place || { name: brain.title, query: brain.title }, source.location);
-        if (resolved.image && !source.photo_key) {
-          const m = await attempt('place image', () => putMediaFromUrl(env, id, 'image', resolved.image));
-          if (m) media.push(m);
-        }
-        break;
-      default:
-        resolved = {};
+      for (const k of ['url', 'site', 'page_title', 'wikipedia_title', 'track', 'album', 'book']) if (r[k] !== undefined) resolved[k] = r[k];
     }
 
-    if (brain.observations?.length) resolved.observations = brain.observations.slice(0, 6);
+    if (candidates.length) {
+      const top = candidates[0];
+      resolved.name = top.name;
+      if (top.url) resolved.url = top.url;
+      if (top.google_fonts !== undefined) resolved.google_fonts = top.google_fonts;
+      if (top.confidence < 0.85) needsConfirm = true;
+    }
+    if (image && !media.some(m => m.role === 'cover')) {
+      const m = await attempt('image', () => putMediaFromUrl(env, id, 'image', image));
+      if (m) media.push(m);
+    }
+    if (!resolved.links.length && !photo && !resolved.text) {
+      const q = `${brain.title} ${brain.summary}`.trim();
+      resolved.links.push({ label: 'search', url: `https://www.google.com/search?q=${encodeURIComponent(q)}` });
+    }
+
     await updateItem(env, id, {
       kind: brain.kind,
       title: brain.title || item.title,

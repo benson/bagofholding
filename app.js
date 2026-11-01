@@ -1,11 +1,9 @@
 const API = 'https://bagofholding-api.bensonperry.workers.dev';
-const KINDS = ['idea', 'song_moment', 'font', 'style', 'artwork', 'thing', 'link', 'book', 'film', 'album', 'place', 'quote'];
-const KIND_LABEL = { song_moment: 'song moment' };
 
-const state = { items: [], tags: [], kind: null, tag: null, q: '', authed: false };
+const state = { items: [], tags: [], kinds: [], kind: null, tag: null, q: '', authed: false };
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const label = k => KIND_LABEL[k] || k;
+const label = k => (k || '').replace(/_/g, ' ');
 const key = () => { try { return localStorage.getItem('boh_key') || ''; } catch { return ''; } };
 const headers = () => (key() ? { authorization: `Bearer ${key()}` } : {});
 const media = (item, role) => item.media.find(m => m.role === role);
@@ -22,16 +20,16 @@ async function load() {
   if (state.kind) params.set('kind', state.kind);
   if (state.tag) params.set('tag', state.tag);
   if (state.q) params.set('q', state.q);
-  const [{ items, authed }, { tags }] = await Promise.all([api(`/items?${params}`), api('/tags')]);
-  state.items = items; state.authed = authed; state.tags = tags;
+  const [{ items, authed }, { tags, kinds }] = await Promise.all([api(`/items?${params}`), api('/tags')]);
+  state.items = items; state.authed = authed; state.tags = tags; state.kinds = kinds || [];
   render();
 }
 
 function render() {
   $('#auth-state').textContent = state.authed ? 'signed in' : '';
   const kinds = $('#kinds');
-  kinds.innerHTML = [{ k: null, l: 'all' }, ...KINDS.map(k => ({ k, l: label(k) }))]
-    .map(({ k, l }) => `<button class="chip ${state.kind === k ? 'on' : ''}" data-kind="${k ?? ''}">${l}</button>`).join('');
+  kinds.innerHTML = [{ k: null, l: 'all' }, ...state.kinds.map(x => ({ k: x.kind, l: label(x.kind) }))]
+    .map(({ k, l }) => `<button class="chip ${state.kind === k ? 'on' : ''}" data-kind="${esc(k ?? '')}">${esc(l)}</button>`).join('');
   const tags = $('#tags');
   tags.innerHTML = state.tags.map(t => `<button class="chip ${state.tag === t.tag ? 'on' : ''}" data-tag="${esc(t.tag)}">${esc(t.tag)}<span class="n">${t.n}</span></button>`).join('');
 
@@ -46,43 +44,29 @@ function render() {
 function card(item) {
   const r = item.resolved || {};
   const t = thumb(item);
+  const kind = item.kind;
   let top = '';
   let body = '';
-  switch (item.kind) {
-    case 'font':
-      top = `<div class="specimen" style="font-family:'${esc(r.name)}', serif">${esc(r.name || item.title || 'font')}</div>`;
-      body = `<div class="title">${esc(r.name || item.title)}</div><div class="sub">${r.google_fonts ? 'google fonts' : 'font'}${r.confidence && r.confidence < 1 ? ` · ${Math.round(r.confidence * 100)}%` : ''}</div>`;
-      if (r.google_fonts && r.name) ensureFont(r.name);
-      break;
-    case 'idea':
-      body = `<div class="text">${esc(r.text || item.title)}</div>`;
-      break;
-    case 'quote':
-      body = `<div class="text">“${esc(r.text || item.title)}”</div>${r.attribution ? `<div class="sub">${esc(r.attribution)}</div>` : ''}`;
-      break;
-    case 'song_moment':
-      top = t ? `<img class="thumb" src="${t.url}" alt="" loading="lazy">` : '';
-      body = `<div class="title">${esc(r.track || item.title)}</div><div class="sub">${esc(r.artist || '')}${r.start_s != null ? ` · ${fmt(r.start_s)}–${fmt(r.end_s)}` : ''}${r.clip === 'pending' ? ' · clip pending' : ''}</div>`;
-      break;
-    case 'link':
-      top = t ? `<img class="thumb wide" src="${t.url}" alt="" loading="lazy">` : '';
-      body = `<div class="title">${esc(r.title || item.title)}</div><div class="sub">${esc(r.site || '')}</div>`;
-      break;
-    case 'style':
-      top = t ? `<img class="thumb wide" src="${t.url}" alt="" loading="lazy">` : '';
-      body = `<div class="title">${esc(r.name || item.title)}</div><div class="sub">${esc([r.era, (r.traits || []).slice(0, 3).join(', ')].filter(Boolean).join(' · '))}</div>`;
-      break;
-    case 'artwork':
-      top = t ? `<img class="thumb" src="${t.url}" alt="" loading="lazy">` : '';
-      body = `<div class="title">${esc(r.title || item.title)}</div><div class="sub">${esc([r.artist, r.year].filter(Boolean).join(', '))}</div>`;
-      break;
-    default:
-      top = t ? `<img class="thumb${item.kind === 'thing' || item.kind === 'place' ? ' wide' : ''}" src="${t.url}" alt="" loading="lazy">` : '';
-      body = `<div class="title">${esc(item.title)}</div>${item.summary ? `<div class="sub">${esc(item.summary)}</div>` : ''}`;
+  if (kind === 'font') {
+    top = `<div class="specimen" style="font-family:'${esc(r.name)}', serif">${esc(r.name || item.title || 'font')}</div>`;
+    body = `<div class="title">${esc(r.name || item.title)}</div><div class="sub">${r.google_fonts ? 'google fonts' : 'font'}${r.confidence && r.confidence < 1 ? ` · ${Math.round(r.confidence * 100)}%` : ''}</div>`;
+    if (r.google_fonts && r.name) ensureFont(r.name);
+  } else if (kind === 'idea') {
+    body = `<div class="text">${esc(r.text || item.title)}</div>`;
+  } else if (kind === 'quote') {
+    body = `<div class="text">“${esc(r.text || item.title)}”</div>${r.attribution ? `<div class="sub">${esc(r.attribution)}</div>` : ''}`;
+  } else if (kind === 'song moment' && r.song) {
+    top = t ? `<img class="thumb" src="${t.url}" alt="" loading="lazy">` : '';
+    body = `<div class="title">${esc(r.song.track || item.title)}</div><div class="sub">${esc(r.song.artist || '')}${r.song.start_s != null ? ` · ${fmt(r.song.start_s)}–${fmt(r.song.end_s)}` : ''}${r.song.clip === 'pending' ? ' · clip pending' : ''}</div>`;
+  } else {
+    const square = ['artwork', 'album', 'book', 'film'].includes(kind);
+    top = t ? `<img class="thumb${square ? '' : ' wide'}" src="${t.url}" alt="" loading="lazy">` : '';
+    const sub = item.summary || (r.fields || []).slice(0, 2).map(f => f.value).join(' · ');
+    body = `<div class="title">${esc(item.title)}</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ''}`;
   }
   const status = item.status !== 'resolved' ? `<span class="status ${item.status}">${item.status.replace('_', ' ')}</span>` : '';
   const lock = state.authed && !item.public ? '<span class="lock" title="private">·</span>' : '';
-  return `<button class="card ${item.kind}" data-id="${item.id}">${top}<div class="body"><div class="kind"><span>${label(item.kind)}</span><span>${status}${lock}</span></div>${body}<div class="tagline">${item.tags.map(x => `<span>${esc(x)}</span>`).join('')}</div></div></button>`;
+  return `<button class="card ${esc(kind.replace(/ /g, '-'))}" data-id="${item.id}">${top}<div class="body"><div class="kind"><span>${esc(label(kind))}</span><span>${status}${lock}</span></div>${body}<div class="tagline">${item.tags.map(x => `<span>${esc(x)}</span>`).join('')}</div></div></button>`;
 }
 
 const fmt = s => (s == null ? '' : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`);
@@ -102,49 +86,31 @@ function openDetail(id) {
   const r = item.resolved || {};
   const s = item.source || {};
   const photo = media(item, 'photo'), cover = media(item, 'cover'), clip = media(item, 'clip'), image = media(item, 'image'), audio = media(item, 'audio');
-  let h = `<h2>${esc(item.title)}</h2><div class="kind">${label(item.kind)}${item.summary ? ` · ${esc(item.summary)}` : ''}</div>`;
+  const links = (r.links || []).map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label || l.url)}</a>`);
+  let h = `<h2>${esc(item.title)}</h2><div class="kind">${esc(label(item.kind))}${item.summary ? ` · ${esc(item.summary)}` : ''}</div>`;
   if (clip) h += `<video controls playsinline poster="${cover ? cover.url : ''}" src="${clip.url}"></video>`;
   else if (cover || image) h += `<img class="hero" src="${(cover || image).url}" alt="">`;
   if (item.kind === 'font') {
     if (r.google_fonts && r.name) ensureFont(r.name);
     h += `<div class="text" style="font-family:'${esc(r.name)}', serif; font-size: 40px; line-height: 1.1">${esc(r.name || '')}<br><span style="font-size:18px">the quick brown fox jumps over the lazy dog 0123456789</span></div>`;
-    if (r.url) h += `<div class="row"><a href="${r.url}" target="_blank" rel="noopener">${r.google_fonts ? 'google fonts' : 'find it'}</a></div>`;
-    if (item.status === 'needs_confirm' && item.candidates.length && state.authed) {
-      h += `<div class="row">which one is it?</div><div class="candidates">${item.candidates.map((c, i) => `<button data-confirm="${i}"><span>${esc(c.name)}</span><span class="conf">${Math.round(c.confidence * 100)}% · ${esc(c.reason)}</span></button>`).join('')}</div>`;
-    } else if (item.candidates.length > 1) {
-      h += `<div class="row">also considered: ${item.candidates.slice(1).map(c => esc(c.name)).join(', ')}</div>`;
-    }
   }
-  if (item.kind === 'idea') h += `<div class="text">${esc(r.text || '')}</div>`;
-  if (item.kind === 'quote') h += `<div class="text">“${esc(r.text || '')}”${r.attribution ? `<br><span style="color:var(--muted)">${esc(r.attribution)}</span>` : ''}</div>`;
-  if (item.kind === 'song_moment') {
-    h += `<div class="row">${esc(r.artist || '')} · ${esc(r.album || '')}${r.start_s != null ? ` · ${fmt(r.start_s)}–${fmt(r.end_s)}` : ''}</div>`;
-    if (r.clip === 'pending') h += `<div class="row">clip pending</div>`;
-    if (r.clip === 'failed') h += `<div class="row">clip failed${r.clip_error ? `: ${esc(r.clip_error)}` : ''}</div>`;
-    if (r.itunes_url) h += `<div class="row"><a href="${r.itunes_url}" target="_blank" rel="noopener">apple music</a>${r.preview_url ? ` · <a href="${r.preview_url}" target="_blank" rel="noopener">preview</a>` : ''}</div>`;
+  if (r.text) h += item.kind === 'quote'
+    ? `<div class="text">“${esc(r.text)}”${r.attribution ? `<br><span style="color:var(--muted)">${esc(r.attribution)}</span>` : ''}</div>`
+    : `<div class="text">${esc(r.text)}</div>`;
+  if (r.song) {
+    h += `<div class="row">${esc(r.song.artist || '')}${r.song.album ? ` · ${esc(r.song.album)}` : ''}${r.song.start_s != null ? ` · ${fmt(r.song.start_s)}–${fmt(r.song.end_s)}` : ''}</div>`;
+    if (r.song.clip === 'pending') h += `<div class="row">clip pending</div>`;
+    if (r.song.clip === 'failed') h += `<div class="row">clip failed${r.song.clip_error ? `: ${esc(r.song.clip_error)}` : ''}</div>`;
   }
-  if (item.kind === 'link') h += `<div class="row"><a href="${r.url}" target="_blank" rel="noopener">${esc(r.url || '')}</a></div>${r.description ? `<div class="text" style="font-size:14px">${esc(r.description)}</div>` : ''}`;
-  if (item.kind === 'thing') h += `<div class="text" style="font-size:14px">${esc(r.what || '')}${r.maker ? ` · ${esc(r.maker)}` : ''}</div>${r.search_url ? `<div class="row"><a href="${r.search_url}" target="_blank" rel="noopener">find it</a></div>` : ''}`;
-  if (item.kind === 'book') h += `<div class="row">${esc(r.author || '')}${r.year ? ` · ${r.year}` : ''}${r.url ? ` · <a href="${r.url}" target="_blank" rel="noopener">open library</a>` : ''}</div>`;
-  if (item.kind === 'film') h += `<div class="row">${r.year ? esc(r.year) : ''}${r.search_url ? ` · <a href="${r.search_url}" target="_blank" rel="noopener">find it</a>` : ''}</div>`;
-  if (item.kind === 'album') h += `<div class="row">${esc(r.artist || '')}${r.year ? ` · ${r.year}` : ''}${r.itunes_url ? ` · <a href="${r.itunes_url}" target="_blank" rel="noopener">apple music</a>` : ''}</div>`;
-  if (item.kind === 'place') {
-    if (r.extract) h += `<div class="text" style="font-size:14px;color:var(--muted)">${esc(r.extract)}</div>`;
-    h += `<div class="row">${r.map_url ? `<a href="${r.map_url}" target="_blank" rel="noopener">map</a>` : ''}${r.url ? ` · <a href="${r.url}" target="_blank" rel="noopener">wikipedia</a>` : ''}</div>`;
+  if (item.status === 'needs_confirm' && item.candidates.length && state.authed) {
+    h += `<div class="row">which one is it?</div><div class="candidates">${item.candidates.map((c, i) => `<button data-confirm="${i}"><span>${esc(c.name)}</span><span class="conf">${Math.round(c.confidence * 100)}%${c.reason ? ` · ${esc(c.reason)}` : ''}</span></button>`).join('')}</div>`;
+  } else if (item.candidates.length > 1) {
+    h += `<div class="row">also considered: ${item.candidates.slice(1).map(c => esc(c.name)).join(', ')}</div>`;
   }
-  if (item.kind === 'style') {
-    h += `<div class="row">${esc(r.era || '')}</div>`;
-    if (r.traits?.length) h += `<div class="text" style="font-size:14px">${r.traits.map(esc).join(' · ')}</div>`;
-    if (r.extract) h += `<div class="text" style="font-size:14px;color:var(--muted)">${esc(r.extract)}</div>`;
-    h += `<div class="row">${r.url ? `<a href="${r.url}" target="_blank" rel="noopener">wikipedia</a> · ` : ''}${r.search_url ? `<a href="${r.search_url}" target="_blank" rel="noopener">more like this</a>` : ''}</div>`;
-    if (r.related?.length) h += `<div class="row">related: ${r.related.map(esc).join(', ')}</div>`;
-  }
-  if (item.kind === 'artwork') {
-    h += `<div class="row">${esc([r.artist, r.year, r.medium, r.movement].filter(Boolean).join(' · '))}</div>`;
-    if (r.extract) h += `<div class="text" style="font-size:14px;color:var(--muted)">${esc(r.extract)}</div>`;
-    h += `<div class="row">${r.url ? `<a href="${r.url}" target="_blank" rel="noopener">wikipedia</a> · ` : ''}${r.search_url ? `<a href="${r.search_url}" target="_blank" rel="noopener">find it</a>` : ''}</div>`;
-  }
-  if (r.observations?.length) h += `<div class="row obs">${r.observations.map(o => `<span><b>${esc(o.label)}</b> ${esc(o.value)}</span>`).join('')}</div>`;
+  if (r.fields?.length) h += `<div class="row obs">${r.fields.map(f => `<span><b>${esc(f.label)}</b> ${esc(f.value)}</span>`).join('')}</div>`;
+  if (r.extract) h += `<div class="text" style="font-size:14px;color:var(--muted)">${esc(r.extract)}</div>`;
+  if (links.length) h += `<div class="row">${links.join(' · ')}</div>`;
+  if (r.observations?.length) h += `<div class="row obs" style="border-top:1px solid var(--line);padding-top:10px">${r.observations.map(o => `<span><b>${esc(o.label)}</b> ${esc(o.value)}</span>`).join('')}</div>`;
   if (item.status === 'failed') h += `<div class="row status failed">failed: ${esc(item.error || '')}</div>`;
   h += `<div class="row">${item.tags.map(t => `<span>#${esc(t)}</span>`).join(' ')}</div>`;
 

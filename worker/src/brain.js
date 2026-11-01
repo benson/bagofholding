@@ -1,59 +1,57 @@
 import Anthropic from '@anthropic-ai/sdk';
 
-export const KINDS = ['idea', 'song_moment', 'font', 'style', 'artwork', 'thing', 'link', 'book', 'film', 'album', 'place', 'quote'];
+export const LOOKUPS = ['wikipedia', 'unfurl', 'itunes_track', 'itunes_album', 'openlibrary', 'google_font', 'song_clip', 'web'];
 
-const SYSTEM = `You are the brain of Bag of Holding, a personal collection for Benson. He captures a fleeting reaction with as little effort as possible: a mumbled sentence, a quick photo, a typed fragment. Your job is to work out what he actually wants to keep and describe the real object, not the capture.
+// Kinds the page has a special card for. Any other kind is fine; it gets the generic card.
+export const KNOWN_KINDS = ['idea', 'quote', 'song moment', 'font', 'style', 'artwork', 'thing', 'link', 'book', 'film', 'album', 'place', 'video', 'recipe', 'person', 'word'];
 
-The raw capture is provenance. The item is the resolved thing.
+const SYSTEM = `You are the brain of Bag of Holding, a personal collection for Benson. He captures a fleeting reaction with as little effort as possible: a mumbled sentence, a quick photo, a typed fragment. Work out what he actually wants to keep and describe the real object, not the capture. The raw capture is provenance; the item is the resolved thing.
 
-First decide what he is reacting to. His words decide, not the photo's subject: "style", "look", "vibe", "aesthetic", "era", "kind of", "this type of" mean he is reacting to HOW it looks, so the kind is style and the specific building, product or place goes into observations. Without such words, he is reacting to WHAT it is: a landmark is a place, a product is a thing, a painting is an artwork.
+First decide what he is reacting to. His words decide, not the photo's subject: "style", "look", "vibe", "aesthetic", "era", "kind of", "this type of" mean he is reacting to HOW it looks, so the kind is style and the specific building, product or place goes into observations. Without such words he is reacting to WHAT it is.
 
-Kinds:
-- "I love 30 seconds to 50 seconds of Song X by Y" is a song_moment: the track and the time range. A single timestamp means a 10 second clip starting there. Convert all times to seconds.
-- A photo plus "I like this font" is a font: identify the typeface in the photo. Give up to 3 candidate families with confidence 0 to 1 and a short reason each. Set needs_confirm unless the top candidate is above 0.85.
-- A photo plus words about the look, the vibe, the era or the movement ("what style is this", "I love this aesthetic", "this kind of building") is a style: name the style precisely (brutalism, art deco, memphis, frutiger aero, mid-century modern, swiss style, wabi-sabi, y2k, ...), give its era, 3 to 5 traits visible in the photo, and closely related styles. Prefer the most specific name that is still correct over a broad one. When the words are about the style, the kind is style even for a famous building; name the building in observations. A building or venue with no words, or words about the place itself ("this place", "I was here"), is a place.
-- A photo of a painting, print, photograph, sculpture or illustration is an artwork: title, artist, year and medium if you can identify it; otherwise the closest movement and a search query.
-- A photo of an object, product, poster, room, garment, plant or vehicle with no other instruction is a thing: say what it is, who makes it if you can tell, a category (product, furniture, garment, plant, animal, vehicle, packaging, sign, food, ...), and a web search query that would find it. If the words name a specific aspect ("the chair", "those tiles"), resolve that aspect, not the whole scene.
-- Whatever the kind, when there is a photo also fill observations: short labeled facts about anything else you can suss out that he might care about later: typeface, style or era, color palette, material, maker, location, photographer. Only confident, useful ones; 0 to 6 of them. Skip the obvious.
-- A URL or "that site X" is a link.
-- A book, film or album title is book, film or album.
-- "This place" or a named venue is a place.
-- "Quote:" or clearly quoted words with an attribution is a quote.
-- Anything else, including half-formed thoughts, is an idea: clean it up into clear prose in his voice, fix transcription errors, keep it short, do not expand it.
+kind: a short lowercase noun for what the item is. Reuse one of the existing kinds when it fits; invent a new one when nothing fits (video, recipe, person, word, game, podcast, tweet, color, plant, restaurant, tool, ...). Never force something into a kind that does not fit. Common kinds and what they resolve to:
+- idea: his thought, cleaned up into clear prose in his voice (text), fixing transcription errors, kept short, not expanded.
+- quote: the words (text) and who said them (attribution).
+- song moment: "30s to 50s of Song X by Y" is a track plus a time range. A single timestamp means a 10 second clip from there. Request the song_clip lookup with artist, track, album if known, start_s and end_s in seconds.
+- font: name the typeface. candidates: up to 3 families with confidence 0 to 1 and a reason. needs_confirm unless the top one is above 0.85. Request google_font.
+- style: the named style or movement (brutalism, memphis, frutiger aero, swiss style, wabi-sabi, y2k, ...), most specific correct name. fields: era, traits seen, related styles. Request wikipedia.
+- artwork: title, artist, year, medium, movement in fields. Request wikipedia.
+- thing: what it is, maker, category in fields. Request web with a query that would find it to buy or read about.
+- link: request unfurl with the URL.
+- book, film, album, person, place: name it; request openlibrary / wikipedia / itunes_album / wikipedia / wikipedia.
+- video: name it as precisely as you can (creator, title, platform). If a URL is given request unfurl; otherwise request web with a query that would find the exact video.
+- recipe, word, game, podcast, anything else: name it, put the useful facts in fields, request web or wikipedia so the canonical page gets attached.
 
-Title: a short natural-language name for the thing itself (track name, font family, product, the idea's gist). Summary: one line, may be empty for ideas. Tags: 2 to 6 lowercase tags. Reuse the existing tags passed to you whenever one fits; invent new ones only when nothing fits. Prefer theme tags (typography, music, product, architecture, writing, design, food, humor) and specific tags (an artist, a genre, a material).
-
-Fill the object for the chosen kind; leave the other kinds' objects with empty strings, empty arrays and 0. Unknown values are empty strings.
- Dictation is noisy: "tracks" might be "track", "fawn" might be "font". Infer generously from context.`;
+title: a short natural-language name for the thing itself. summary: one line, may be empty for ideas and quotes. tags: 2 to 6 lowercase tags; reuse the existing tags passed to you whenever one fits, invent only when nothing fits; prefer theme tags (typography, music, product, architecture, writing, design, food, humor) plus specific ones (an artist, a genre, a material).
+fields: short labeled facts about the thing itself (artist, year, maker, era, ingredients, platform, ...). Only what you are confident of.
+observations: when there is a photo, anything else you can suss out that he might care about later: typeface, style or era, color palette, material, maker, location, the specific building or product when the item is a style. 0 to 6, confident ones only, skip the obvious.
+lookups: what the worker should fetch to make the item real. Ask for what helps; several are fine. Each has a type, a query, and args (strings, empty when unused): url, artist, track, album, start_s, end_s, author, title.
+Dictation is noisy: "tracks" might be "track", "fawn" might be "font". Infer generously from context. Unknown values are empty strings, never guesses.`;
 
 function schema() {
   const str = { type: 'string' };
   const num = { type: 'number' };
-  // The API caps union-typed fields per schema, so "unused" is an empty string / empty object, not null.
-  const nullable = (obj) => obj;
   const obj = (props) => ({ type: 'object', properties: props, required: Object.keys(props), additionalProperties: false });
+  const list = (items) => ({ type: 'array', items });
   return {
     type: 'json_schema',
     schema: obj({
-      kind: { type: 'string', enum: KINDS },
+      kind: str,
       title: str,
       summary: str,
-      tags: { type: 'array', items: str },
+      text: str,
+      attribution: str,
+      tags: list(str),
       confidence: num,
       needs_confirm: { type: 'boolean' },
-      idea: nullable(obj({ text: str })),
-      song: nullable(obj({ artist: str, track: str, album: nullable(str), start_s: num, end_s: num })),
-      link: nullable(obj({ url: str })),
-      font: nullable(obj({ candidates: { type: 'array', items: obj({ name: str, confidence: num, reason: str }) } })),
-      style: nullable(obj({ name: str, era: nullable(str), traits: { type: 'array', items: str }, related: { type: 'array', items: str }, search_query: str })),
-      artwork: nullable(obj({ title: nullable(str), artist: nullable(str), year: nullable(str), medium: nullable(str), movement: nullable(str), search_query: str })),
-      observations: { type: 'array', items: obj({ label: str, value: str }) },
-      thing: nullable(obj({ what: str, maker: nullable(str), category: str, search_query: str })),
-      book: nullable(obj({ title: str, author: nullable(str) })),
-      film: nullable(obj({ title: str, year: nullable(str) })),
-      album: nullable(obj({ artist: str, title: str })),
-      place: nullable(obj({ name: str, query: str })),
-      quote: nullable(obj({ text: str, attribution: nullable(str) })),
+      fields: list(obj({ label: str, value: str })),
+      observations: list(obj({ label: str, value: str })),
+      candidates: list(obj({ name: str, confidence: num, reason: str })),
+      lookups: list(obj({
+        type: { type: 'string', enum: LOOKUPS },
+        query: str,
+        args: obj({ url: str, artist: str, track: str, album: str, start_s: str, end_s: str, author: str, title: str }),
+      })),
     }),
   };
 }
@@ -65,7 +63,9 @@ function extractJson(text) {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-export async function classify(env, { transcript, text, note, photo, location, existingTags }) {
+const clean = s => (typeof s === 'string' ? s.trim() : '');
+
+export async function classify(env, { transcript, text, note, photo, location, existingTags, existingKinds }) {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const content = [];
   if (photo) content.push({ type: 'image', source: { type: 'base64', media_type: photo.type, data: photo.base64 } });
@@ -75,6 +75,8 @@ export async function classify(env, { transcript, text, note, photo, location, e
   if (note) lines.push(`Note: ${note}`);
   if (photo && !transcript && !text && !note) lines.push('A photo with no words.');
   if (location) lines.push(`Captured near lat ${location.lat}, lng ${location.lng}.`);
+  const kinds = Array.from(new Set([...KNOWN_KINDS, ...(existingKinds || [])]));
+  lines.push(`Existing kinds: ${kinds.join(', ')}`);
   lines.push(`Existing tags: ${existingTags?.length ? existingTags.join(', ') : '(none yet)'}`);
   lines.push(`Captured at ${new Date().toISOString()}.`);
   content.push({ type: 'text', text: lines.join('\n') });
@@ -95,24 +97,49 @@ export async function classify(env, { transcript, text, note, photo, location, e
     console.warn(`brain: structured output rejected, falling back: ${err.message}`);
     response = await client.messages.create({
       ...base,
-      system: `${SYSTEM}\n\nReply with one JSON object and nothing else, matching this JSON schema exactly (same keys, null for unused kinds):\n${JSON.stringify(schema().schema)}`,
+      system: `${SYSTEM}\n\nReply with one JSON object and nothing else, matching this JSON schema exactly:\n${JSON.stringify(schema().schema)}`,
     });
   }
   if (response.stop_reason === 'refusal') throw new Error(`brain refused: ${response.stop_details?.explanation || ''}`);
   const textBlock = response.content.find(b => b.type === 'text');
   if (!textBlock) throw new Error('brain returned no text');
-  const out = extractJson(textBlock.text);
-  if (!KINDS.includes(out.kind)) out.kind = 'idea';
-  // Empty-string placeholders become nulls; untouched kind objects become null.
-  const blank = v => v === '' || v === 0 || (Array.isArray(v) && v.length === 0);
-  for (const k of ['idea', 'song', 'link', 'font', 'thing', 'book', 'film', 'album', 'place', 'quote', 'style', 'artwork']) {
-    const o = out[k];
-    if (!o || typeof o !== 'object') { out[k] = null; continue; }
-    for (const [kk, vv] of Object.entries(o)) if (vv === '') o[kk] = null;
-    if (Object.values(o).every(v => v === null || blank(v))) out[k] = null;
-  }
-  if (out.font?.candidates) out.font.candidates = out.font.candidates.map(c => ({ name: c.name || c.family || c.font || '', confidence: Number(c.confidence) || 0, reason: c.reason || '' })).filter(c => c.name);
-  if (!Array.isArray(out.observations)) out.observations = [];
-  out.tags = Array.from(new Set((out.tags || []).map(t => String(t).toLowerCase().trim()).filter(Boolean))).slice(0, 8);
-  return out;
+  const raw = extractJson(textBlock.text);
+
+  return {
+    kind: clean(raw.kind).toLowerCase().replace(/[_-]+/g, ' ') || 'idea',
+    title: clean(raw.title),
+    summary: clean(raw.summary),
+    text: clean(raw.text),
+    attribution: clean(raw.attribution),
+    tags: Array.from(new Set((raw.tags || []).map(t => clean(t).toLowerCase()).filter(Boolean))).slice(0, 8),
+    confidence: Number(raw.confidence) || 0,
+    needs_confirm: !!raw.needs_confirm,
+    fields: (raw.fields || []).map(f => ({ label: clean(f.label), value: clean(f.value) })).filter(f => f.label && f.value).slice(0, 12),
+    observations: (raw.observations || []).map(f => ({ label: clean(f.label), value: clean(f.value) })).filter(f => f.label && f.value).slice(0, 6),
+    candidates: (raw.candidates || []).map(c => ({ name: clean(c.name || c.family), confidence: Number(c.confidence) || 0, reason: clean(c.reason) })).filter(c => c.name).slice(0, 5),
+    lookups: (raw.lookups || []).filter(l => LOOKUPS.includes(l.type)).map(l => {
+      const args = {};
+      for (const [k, v] of Object.entries(l.args || {})) if (clean(v)) args[k] = clean(v);
+      return { type: l.type, query: clean(l.query), args };
+    }).slice(0, 6),
+  };
+}
+
+// A second, tool-using call: find the canonical page for something the brain could only describe.
+export async function webFind(env, query) {
+  const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
+  const response = await client.messages.create({
+    model: env.CLAUDE_MODEL || 'claude-opus-5-5',
+    max_tokens: 2000,
+    output_config: { effort: 'low' },
+    tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 3 }],
+    system: 'Find the single best canonical web page for what the user describes (the official page, the original video, the product page, the primary source). Then reply with only a JSON object: {"title": "...", "url": "...", "summary": "one line", "image": "direct image url or empty"}. If nothing fits well, use empty strings.',
+    messages: [{ role: 'user', content: query }],
+  });
+  if (response.stop_reason === 'refusal') return null;
+  const txt = response.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+  try {
+    const o = extractJson(txt);
+    return o.url ? { title: clean(o.title), url: clean(o.url), summary: clean(o.summary), image: clean(o.image) } : null;
+  } catch { return null; }
 }
