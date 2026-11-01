@@ -1,0 +1,25 @@
+name = "bagofholding-api"
+main = "src/index.js"
+compatibility_date = "2026-05-07"
+workers_dev = true
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+CLAUDE_MODEL = "claude-opus-5-5"
+WHISPER_MODEL = "@cf/openai/whisper-large-v3-turbo"
+ALLOWED_ORIGINS = "https://bensonperry.com,http://localhost:3000,http://localhost:5173"
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bagofholding"
+database_id = "d9567031-6632-4af3-820f-6f4ff75dd7e8"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "bagofholding-media"

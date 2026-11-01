@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>bag of holding</title>
+  <meta name="description" content="things benson wanted to keep">
+  <meta property="og:title" content="bag of holding">
+  <meta property="og:description" content="things benson wanted to keep">
+  <meta property="og:url" content="https://bensonperry.com/bagofholding">
+  <meta property="og:type" content="website">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
+  <link rel="stylesheet" href="https://bensonperry.com/shared/common.css">
+  <link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>bag of holding</h1>
+      <div class="controls">
+        <input id="search" type="search" placeholder="search" autocomplete="off">
+        <div id="kinds" class="chips"></div>
+      </div>
+      <div id="tags" class="chips tags"></div>
+    </header>
+
+    <section id="attention" class="attention hidden">
+      <h2>needs a tap</h2>
+      <div id="attention-grid" class="grid"></div>
+    </section>
+
+    <main>
+      <div id="grid" class="grid"></div>
+      <p id="empty" class="empty hidden">nothing here yet</p>
+    </main>
+
+    <div id="detail" class="detail hidden" aria-modal="true" role="dialog">
+      <div class="detail-card">
+        <button class="close" id="detail-close" aria-label="close">×</button>
+        <div id="detail-body"></div>
+      </div>
+    </div>
+
+    <footer class="local-footer">
+      <button id="key-btn" class="linkish">key</button>
+      <span id="auth-state"></span>
+    </footer>
+  </div>
+  <script src="app.js?v=1"></script>
+</body>
+</html>
