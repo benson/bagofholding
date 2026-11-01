@@ -57,6 +57,14 @@ async function handle(job) {
     try { form.set('cover', new Blob([await (await fetch(meta.artwork)).arrayBuffer()], { type: 'image/jpeg' }), 'cover.jpg'); } catch {}
   }
   try {
+    if (job.args.have_clip) {
+      // Only the metadata and cover were missing; don't cut the clip again.
+      form.set('meta', JSON.stringify(meta));
+      const res = await fetch(`${API}/jobs/${job.id}/complete`, { method: 'POST', headers, body: form });
+      if (!res.ok) throw new Error(`complete ${res.status}: ${await res.text()}`);
+      log('meta only', job.id);
+      return;
+    }
     const range = `${fmt(start_s ?? 0)}-${fmt(end_s ?? (start_s ?? 0) + 10)}`;
     const args = [SONG_CLIP, `${artist} ${track}`, range, '--out', tmp];
     if (album) args.push('--album', album);

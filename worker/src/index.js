@@ -158,9 +158,12 @@ export default {
         const form = await req.formData();
         const item = await getItem(env, job.item_id, origin);
         if (!item) return respond({ error: 'item gone' }, 410);
-        const media = [...item.media];
+        let media = [...item.media];
         const clip = form.get('clip');
-        if (clip && typeof clip !== 'string' && clip.size) media.push(await putMedia(env, item.id, 'clip', clip.stream(), clip.type || 'video/mp4'));
+        if (clip && typeof clip !== 'string' && clip.size) {
+          media = media.filter(m => m.role !== 'clip');
+          media.push(await putMedia(env, item.id, 'clip', clip.stream(), clip.type || 'video/mp4'));
+        }
         const cover = form.get('cover');
         if (cover && typeof cover !== 'string' && cover.size && !media.some(x => x.role === 'cover')) media.push(await putMedia(env, item.id, 'cover', cover.stream(), cover.type || 'image/jpeg'));
         let meta = {};

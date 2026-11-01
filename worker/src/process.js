@@ -30,7 +30,7 @@ export async function processItem(env, id, origin) {
       transcript: source.transcript, text: source.text, note: source.note, photo, location: source.location, existingTags: tags,
     });
 
-    const media = item.media.filter(m => ['original', 'photo', 'audio', 'clip'].includes(m.role));
+    const media = item.media.filter(m => ['original', 'photo', 'audio', 'clip', 'cover'].includes(m.role) && !(m.role === 'cover' && item.kind !== 'song_moment'));
     let resolved = {};
     let candidates = [];
     let needsConfirm = !!brain.needs_confirm;
@@ -59,13 +59,14 @@ export async function processItem(env, id, origin) {
           const m = await attempt('cover', () => putMediaFromUrl(env, id, 'cover', hit.artwork));
           if (m) media.push(m);
         }
-        if (item.media.some(m => m.role === 'clip')) {
-          resolved.clip = 'ready';
-        } else {
+        const hasClip = media.some(m => m.role === 'clip');
+        const hasCover = media.some(m => m.role === 'cover');
+        if (hasClip) resolved.clip = 'ready';
+        if (!hasClip || !hasCover) {
           const pending = await env.DB.prepare(`SELECT 1 FROM jobs WHERE item_id = ? AND status IN ('queued','running')`).bind(id).first();
           if (!pending) await enqueueJob(env, id, 'song_clip', {
             artist: resolved.artist, track: resolved.track, album: resolved.album,
-            start_s: resolved.start_s, end_s: resolved.end_s,
+            start_s: resolved.start_s, end_s: resolved.end_s, have_clip: hasClip,
           });
         }
         break;
